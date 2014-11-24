@@ -15,8 +15,8 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
 
     private Table stringTable;
 
-    public StoreableTable(String name, ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.Database databaseParent) {
-        super(name, databaseParent);
+    public StoreableTable(String name, Database databaseParent) {
+        Table stringTable=new Table(name, databaseParent.getRootDirectoryPath());
     }
 
     @Override

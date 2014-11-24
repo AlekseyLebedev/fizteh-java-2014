@@ -24,19 +24,19 @@ public class Database implements TableProvider {
     private static Map<Class<?>, String> typesStringMap = new TreeMap<>();
 
     static {
-        stringTypesMap.put("int", int.class);
-        stringTypesMap.put("long", long.class);
-        stringTypesMap.put("byte", byte.class);
-        stringTypesMap.put("float", float.class);
-        stringTypesMap.put("double", double.class);
-        stringTypesMap.put("boolean", boolean.class);
+        stringTypesMap.put("int", Integer.class);
+        stringTypesMap.put("long", Long.class);
+        stringTypesMap.put("byte", Byte.class);
+        stringTypesMap.put("float", Float.class);
+        stringTypesMap.put("double", Double.class);
+        stringTypesMap.put("boolean", Boolean.class);
         stringTypesMap.put("String", String.class);
-        typesStringMap.put(int.class, "int");
-        typesStringMap.put(long.class, "long");
-        typesStringMap.put(byte.class, "byte");
-        typesStringMap.put(float.class, "float");
-        typesStringMap.put(double.class, "double");
-        typesStringMap.put(boolean.class, "boolean");
+        typesStringMap.put(Integer.class, "int");
+        typesStringMap.put(Long.class, "long");
+        typesStringMap.put(Byte.class, "byte");
+        typesStringMap.put(Float.class, "float");
+        typesStringMap.put(java.lang.Double.class, "double");
+        typesStringMap.put(Boolean.class, "boolean");
         typesStringMap.put(String.class, "String");
 
     }
@@ -116,12 +116,12 @@ public class Database implements TableProvider {
         return tableSignature;
     }
 
-    private Path getRootDirectoryPath() {
+    public Path getRootDirectoryPath() {
         return directoryPath;
     }
 
     private StoreableTable generateTable(String name) {
-        return null;//TODO
+        return new StoreableTable(name, this);
     }
 
     @Override
@@ -134,6 +134,7 @@ public class Database implements TableProvider {
 
     @Override
     public Storeable deserialize(Table table, String value) throws ParseException {
+
         //TODO
         throw new NotImplementedException();
         return null;
