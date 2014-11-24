@@ -39,9 +39,6 @@ public abstract class JsonParser {
 
     public static Pair<Object, Integer> parseJson(String json, int begin, Character possibleTerminator)
             throws BrokenJsonException, JsonTerminatedException {
-        Character first = null;
-        List<Object> list;
-        Map<String, Object> map;
         int i;
         for (i = begin; i < json.length(); i++) {
             char symbol = json.charAt(i);
