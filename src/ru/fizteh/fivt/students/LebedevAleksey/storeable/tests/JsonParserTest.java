@@ -1,10 +1,10 @@
-package ru.fizteh.fivt.students.LebedevAleksey.temp.tests;
+package ru.fizteh.fivt.students.LebedevAleksey.storeable.tests;
 
 import org.junit.Assert;
 import org.junit.Test;
-import ru.fizteh.fivt.students.LebedevAleksey.temp.json.BrokenJsonException;
-import ru.fizteh.fivt.students.LebedevAleksey.temp.json.JsonParser;
-import ru.fizteh.fivt.students.LebedevAleksey.temp.json.JsonUnsopportedObjectException;
+import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.BrokenJsonException;
+import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonParser;
+import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonUnsopportedObjectException;
 
 import java.io.File;
 import java.util.*;

@@ -1,4 +1,4 @@
-package ru.fizteh.fivt.students.LebedevAleksey.temp.json;
+package ru.fizteh.fivt.students.LebedevAleksey.storeable.json;
 
 public class BrokenJsonException extends Exception {
     public BrokenJsonException() {

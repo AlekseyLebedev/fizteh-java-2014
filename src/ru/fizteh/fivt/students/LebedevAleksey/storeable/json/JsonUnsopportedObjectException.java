@@ -1,4 +1,4 @@
-package ru.fizteh.fivt.students.LebedevAleksey.temp.json;
+package ru.fizteh.fivt.students.LebedevAleksey.storeable.json;
 
 public class JsonUnsopportedObjectException extends Exception {
     public JsonUnsopportedObjectException() {
