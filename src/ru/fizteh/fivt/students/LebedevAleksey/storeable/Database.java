@@ -149,9 +149,8 @@ public class Database implements TableProvider {
 
     @Override
     public Storeable createFor(Table table) {
-        //TODO
-        throw new NotImplementedException();
-        return null;
+        return new ru.fizteh.fivt.students.LebedevAleksey.storeable.Storeable(new Object[table.getColumnsCount()],
+                table);
     }
 
     @Override
