@@ -416,4 +416,15 @@ public class JsonParserTest {
         map.put(1, 2);
         JsonParser.getJson(map);
     }
+
+    @Test
+    public void testBrokenJSONExceptionCanSaveOffset() {
+        BrokenJsonException ex = new BrokenJsonException("Test", 7);
+        Assert.assertEquals("Test", ex.getMessage());
+        Assert.assertEquals(7, ex.getOffsetError());
+        ex = new BrokenJsonException("Message", 42);
+        Assert.assertEquals("Message", ex.getMessage());
+        Assert.assertEquals(42, ex.getOffsetError());
+    }
+
 }
