@@ -4,6 +4,8 @@ import ru.fizteh.fivt.storage.structured.ColumnFormatException;
 import ru.fizteh.fivt.storage.structured.Storeable;
 import ru.fizteh.fivt.storage.structured.Table;
 import ru.fizteh.fivt.storage.structured.TableProvider;
+import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.BrokenJsonException;
+import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonParser;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.io.DataOutputStream;
@@ -13,6 +15,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.ParseException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -134,9 +137,11 @@ public class Database implements TableProvider {
 
     @Override
     public Storeable deserialize(Table table, String value) throws ParseException {
-
-        //TODO
-        throw new NotImplementedException();
+        try {
+            JsonParser.parseJson(value);
+        } catch (BrokenJsonException e) {
+            throw new ParseException("Can't parse JSON: " + e.getMessage(), e.getOffsetError());
+        }
         return null;
     }
 
@@ -149,14 +154,12 @@ public class Database implements TableProvider {
 
     @Override
     public Storeable createFor(Table table) {
-        return new ru.fizteh.fivt.students.LebedevAleksey.storeable.Storeable(new Object[table.getColumnsCount()],
-                table);
+        return new ru.fizteh.fivt.students.LebedevAleksey.storeable.Storeable(Arrays.asList(
+                new Object[table.getColumnsCount()]), table);
     }
 
     @Override
     public Storeable createFor(Table table, List<?> values) throws ColumnFormatException, IndexOutOfBoundsException {
-        //TODO
-        throw new NotImplementedException();
-        return null;
+        return new ru.fizteh.fivt.students.LebedevAleksey.storeable.Storeable(values, table);
     }
 }

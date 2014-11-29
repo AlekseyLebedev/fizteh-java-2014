@@ -7,10 +7,27 @@ import java.util.List;
 
 public class Storeable implements ru.fizteh.fivt.storage.structured.Storeable {
     public static final String INCORRECT_TYPE_MESSAGE = "Value type isn't correct.";
-    private List<Object> data;
+    private List<?> data;
     private Table table;
 
-    public Storeable(List<Object> data, Table table) {
+    public Storeable(List<?> data, Table table) throws ColumnFormatException {
+        if (data == null) {
+            throw new IllegalArgumentException("Argument \"data\" is null");
+        }
+        if (table == null) {
+            throw new IllegalArgumentException("Argument \"table\" is null");
+        }
+        if (data.size() != table.getColumnsCount()) {
+            throw new IndexOutOfBoundsException("Argument arrays are different sizes");
+        }
+        for (int i = 0; i < data.size(); ++i) {
+            Object item = data.get(i);
+            if (item != null) {
+                if (item.getClass() != table.getColumnType(i)) {
+                    throw new ColumnFormatException("Wrong type of column number " + i);
+                }
+            }
+        }
         this.data = data;
         this.table = table;
     }
