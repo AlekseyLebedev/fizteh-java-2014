@@ -25,14 +25,14 @@ public abstract class JsonParser {
 
     public static Object parseJson(String json) throws BrokenJsonException {
         json = json.trim();
-        Pair<Object, Integer> result = null;
+        Pair<Object, Integer> result;
         try {
             result = parseJson(json, 0, null);
         } catch (JsonTerminatedException e) {
-            throw new BrokenJsonException("Wrong JSON");
+            throw new BrokenJsonException("Wrong JSON", json.length() > 0 ? json.length() - 1 : 0);
         }
         if (result.getValue() != json.length()) {
-            throw new BrokenJsonException(UNEXPECTED_STOP_MESSAGE);
+            throw new BrokenJsonException(UNEXPECTED_STOP_MESSAGE, result.getValue());
         }
         return result.getKey();
     }
@@ -43,7 +43,7 @@ public abstract class JsonParser {
         for (i = begin; i < json.length(); i++) {
             char symbol = json.charAt(i);
             if (possibleTerminator != null && possibleTerminator.equals(symbol)) {
-                throw new JsonTerminatedException();
+                throw new JsonTerminatedException(i);
             }
             switch (symbol) {
                 case ' ':
@@ -79,19 +79,19 @@ public abstract class JsonParser {
                                 if ("false".equals(json.substring(i, i + 5))) {
                                     return new Pair<>(false, i + 5);
                                 } else {
-                                    throw new BrokenJsonException("Unexpected symbol in position " + i + 4);
+                                    throw new BrokenJsonException("Unexpected symbol in position " + i + 4, i + 4);
                                 }
                             default:
-                                throw new BrokenJsonException("Wrong token");
+                                throw new BrokenJsonException("Wrong token", i);
                         }
                     } catch (IndexOutOfBoundsException e) {
-                        throw new BrokenJsonException("Unexpected symbol \"" + symbol + "\" in position " + i, e);
+                        throw new BrokenJsonException("Unexpected symbol \"" + symbol + "\" in position " + i, e, i);
                     }
                 default:
-                    throw new BrokenJsonException("Unexpected symbol \"" + symbol + "\" in position " + i);
+                    throw new BrokenJsonException("Unexpected symbol \"" + symbol + "\" in position " + i, i);
             }
         }
-        throw new BrokenJsonException(UNEXPECTED_STOP_MESSAGE);
+        throw new BrokenJsonException(UNEXPECTED_STOP_MESSAGE, i);
     }
 
     private static Pair<Object, Integer> parseMapFromJson(String json, int begin) throws BrokenJsonException {
@@ -108,7 +108,7 @@ public abstract class JsonParser {
             try {
                 key = (String) result.getKey();
             } catch (ClassCastException e) {
-                throw new BrokenJsonException("Wrong map key");
+                throw new BrokenJsonException("Wrong map key", i);
             }
             i = result.getValue();
             boolean exited = false;
@@ -127,7 +127,7 @@ public abstract class JsonParser {
             try {
                 result = parseJson(json, i, null);
             } catch (JsonTerminatedException e) {
-                throw new BrokenJsonException("JSON is not correct");
+                throw new BrokenJsonException("JSON is not correct", e.getOffset());
             }
             map.put(key, result.getKey());
             i = result.getValue();
@@ -147,7 +147,7 @@ public abstract class JsonParser {
                 }
             }
         }
-        throw new BrokenJsonException(UNEXPECTED_STOP_MESSAGE);
+        throw new BrokenJsonException(UNEXPECTED_STOP_MESSAGE, i);
     }
 
     private static Pair<Object, Integer> searchNextChar(String json, Object value, int i, char mask) {
@@ -186,7 +186,7 @@ public abstract class JsonParser {
                 }
             }
         }
-        throw new BrokenJsonException(UNEXPECTED_STOP_MESSAGE);
+        throw new BrokenJsonException(UNEXPECTED_STOP_MESSAGE, i);
     }
 
     private static Pair<Object, Integer> parseNumberFromJson(String json, int begin) throws BrokenJsonException {
@@ -233,7 +233,7 @@ public abstract class JsonParser {
         } catch (NumberFormatException e) {
             // Next type...
         }
-        throw new BrokenJsonException("Wrong number");
+        throw new BrokenJsonException("Wrong number", i);
     }
 
     private static Pair<Object, Integer> parseStringFromJson(String json, int begin)
@@ -251,12 +251,12 @@ public abstract class JsonParser {
                 }
             }
         }
-        throw new BrokenJsonException(UNEXPECTED_STOP_MESSAGE);
+        throw new BrokenJsonException(UNEXPECTED_STOP_MESSAGE, json.length() - 1);
     }
 
     private static int parseSlashSequense(String json, StringBuilder builder, int i) throws BrokenJsonException {
         if (i + 1 == json.length()) {
-            throw new BrokenJsonException("String doesn't finish");
+            throw new BrokenJsonException("String doesn't finish", i);
         }
         switch (json.charAt(i + 1)) {
             case '"':
@@ -285,17 +285,17 @@ public abstract class JsonParser {
                 return i + 1;
             case 'u':
                 if (i + 5 >= json.length()) {
-                    throw new BrokenJsonException("Error in \\u in string");
+                    throw new BrokenJsonException("Error in \\u in string", i);
                 }
                 try {
                     int num = Integer.parseInt(json.substring(i + 2, i + 6), 16);
                     builder.append((char) num);
                     return i + 5;
                 } catch (NumberFormatException e) {
-                    throw new BrokenJsonException("Error in \\u in string: can't parse int", e);
+                    throw new BrokenJsonException("Error in \\u in string: can't parse int", e, i + 2);
                 }
             default:
-                throw new BrokenJsonException("Unknown \\ sequence in char number " + i);
+                throw new BrokenJsonException("Unknown \\ sequence in char number " + i, i);
         }
     }
 
@@ -407,4 +407,14 @@ public abstract class JsonParser {
 }
 
 class JsonTerminatedException extends Exception {
+    private int offset;
+
+    public JsonTerminatedException(int index) {
+        super();
+        offset = index;
+    }
+
+    public int getOffset() {
+        return offset;
+    }
 }
