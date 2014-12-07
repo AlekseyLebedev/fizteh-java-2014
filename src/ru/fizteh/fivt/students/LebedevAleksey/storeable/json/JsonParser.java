@@ -17,7 +17,7 @@ public abstract class JsonParser {
         JsonParser.NEED_SHORT_INTEGER_TYPES.set(needShortIntegerTypes);
     }
 
-    public static String getJson(Object data) throws JsonUnsopportedObjectException {
+    public static String getJson(Object data) throws JsonUnsupportedObjectException {
         StringBuilder result = new StringBuilder();
         createJson(data, result);
         return result.toString();
@@ -302,7 +302,7 @@ public abstract class JsonParser {
         }
     }
 
-    private static void createJson(Object data, StringBuilder builder) throws JsonUnsopportedObjectException {
+    private static void createJson(Object data, StringBuilder builder) throws JsonUnsupportedObjectException {
         if (data == null) {
             builder.append("null");
             return;
@@ -312,7 +312,7 @@ public abstract class JsonParser {
             try {
                 map = (Map<String, ?>) data;
             } catch (ClassCastException e) {
-                throw new JsonUnsopportedObjectException("Only Map<String, ?> is supported, when you use map", e);
+                throw new JsonUnsupportedObjectException("Only Map<String, ?> is supported, when you use map", e);
             }
             createJson(map, builder);
             return;
@@ -337,7 +337,7 @@ public abstract class JsonParser {
             builder.append(((boolean) data) ? "true" : false);
             return;
         }
-        throw new JsonUnsopportedObjectException("This type (" + data.getClass() + ") is unsupported by JSON.");
+        throw new JsonUnsupportedObjectException("This type (" + data.getClass() + ") is unsupported by JSON.");
     }
 
     private static void createJson(String data, StringBuilder builder) {
@@ -359,7 +359,7 @@ public abstract class JsonParser {
         }
     }
 
-    private static void createJson(Iterable data, StringBuilder builder) throws JsonUnsopportedObjectException {
+    private static void createJson(Iterable data, StringBuilder builder) throws JsonUnsupportedObjectException {
         builder.append("[");
         boolean first = true;
         for (Object item : data) {
@@ -373,7 +373,7 @@ public abstract class JsonParser {
         builder.append("]");
     }
 
-    private static void createJson(Object[] data, StringBuilder builder) throws JsonUnsopportedObjectException {
+    private static void createJson(Object[] data, StringBuilder builder) throws JsonUnsupportedObjectException {
         builder.append("[");
         boolean first = true;
         for (Object item : data) {
@@ -387,7 +387,7 @@ public abstract class JsonParser {
         builder.append("]");
     }
 
-    private static void createJson(Map<String, ?> data, StringBuilder builder) throws JsonUnsopportedObjectException {
+    private static void createJson(Map<String, ?> data, StringBuilder builder) throws JsonUnsupportedObjectException {
         try {
             builder.append("{");
             Set<String> keys = data.keySet();
@@ -404,7 +404,7 @@ public abstract class JsonParser {
             }
             builder.append("}");
         } catch (ClassCastException e) {
-            throw new JsonUnsopportedObjectException("Only Map<String,?> is supported.", e);
+            throw new JsonUnsupportedObjectException("Only Map<String,?> is supported.", e);
         }
     }
 }
