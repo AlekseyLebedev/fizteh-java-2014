@@ -5,68 +5,44 @@ import ru.fizteh.fivt.storage.structured.Storeable;
 import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.DatabaseFileStructureException;
 import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.LoadOrSaveException;
 import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.Table;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
+import ru.fizteh.fivt.students.LebedevAleksey.junit.DatabaseException;
 
-import java.util.*;
-import java.util.function.Consumer;
+import java.io.IOException;
+import java.text.ParseException;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
+    private final String name;
+    private final Database database;
     private Map<String, String> changedKeys = new TreeMap<>();
-
     private Table stringTable;
+    private List<Class<?>> columnTypes;
 
-    public StoreableTable(String name, Database databaseParent) {
-        Table stringTable=new Table(name, databaseParent.getRootDirectoryPath());
+    public StoreableTable(String name, Database databaseParent, List<Class<?>> types) {
+        this.name = name;
+        database = databaseParent;
+        columnTypes = types;
+        Table stringTable = new Table(name, databaseParent.getRootDirectoryPath());
     }
 
-    @Override
-    public Storeable put(String key, Storeable value) throws ColumnFormatException {
-        return null;
-    }
-
-    @Override
-    public boolean remove(String key) throws LoadOrSaveException, DatabaseFileStructureException {
-        String value = super.get(key);
-        String oldValue = get(key);
-        if (value != null) {
-            if (oldValue != null) {
-                changedKeys.put(key, null);
-            }
-        } else {
-            changedKeys.remove(key);
-        }
-        return (oldValue != null);
-    }
-
-    @Override
-    public int size() {
-        return 0;
-    }
-
-    public String getAndRemove(String key) throws DatabaseFileStructureException, LoadOrSaveException {
-        String oldValue = get(key);
-        remove(key);
-        return oldValue;
-    }
-
-    @Override
-    public String getName() {
-        return null;
-    }
-
-    @Override
-    public String get(String key) throws LoadOrSaveException, DatabaseFileStructureException {
-        if (changedKeys.containsKey(key)) {
-            return changedKeys.get(key);
-        } else {
-            return super.get(key);
+    private void checkKeyNotNull(String key) {
+        if (key == null) {
+            throw new IllegalArgumentException("Argument \"key\" is null");
         }
     }
 
-    @Override
-    public String put(String key, String value) throws LoadOrSaveException, DatabaseFileStructureException {
-        String oldValue = get(key);
-        if (value.equals(super.get(key))) {
+    private void checkKeyValueNotNull(String key, Storeable value) {
+        checkKeyNotNull(key);
+        if (value == null) {
+            throw new IllegalArgumentException("Argument \"value\" is null");
+        }
+    }
+
+    private String putStrings(String key, String value) throws DatabaseFileStructureException, LoadOrSaveException {
+        String oldValue = getString(key);
+        if (value.equals(stringTable.get(key))) {
             changedKeys.remove(key);
         } else {
             changedKeys.put(key, value);
@@ -74,87 +50,124 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
         return oldValue;
     }
 
-    @Override
-    public void save() throws LoadOrSaveException, DatabaseFileStructureException {
-        for (String key : changedKeys.keySet()) {
-            String value = changedKeys.get(key);
-            if (value == null) {
-                super.remove(key);
-            } else {
-                super.put(key, value);
-            }
+    private String getString(String key) throws LoadOrSaveException, DatabaseFileStructureException {
+        if (changedKeys.containsKey(key)) {
+            return changedKeys.get(key);
+        } else {
+            return stringTable.get(key);
         }
-        changedKeys.clear();
-        super.save();
     }
 
     @Override
-    public int count() throws LoadOrSaveException, DatabaseFileStructureException {
-        int deletedCount = 0;
-        int addedCount = 0;
-        for (String key : changedKeys.keySet()) {
-            String value = changedKeys.get(key);
-            if (value == null) {
-                ++deletedCount;
-            } else {
-                if (super.get(key) == null) {
-                    addedCount++;
+    public Storeable put(String key, Storeable value) throws ColumnFormatException {
+        checkKeyValueNotNull(key, value);
+        try {
+            return database.deserialize(this, putStrings(key, database.serialize(this, value)));
+        } catch (DatabaseFileStructureException | LoadOrSaveException e) {
+            throw new DatabaseException(e);
+        } catch (ParseException e) {
+            throw new ColumnFormatException(e);
+        }
+    }
+
+    @Override
+    public Storeable remove(String key) {
+        checkKeyNotNull(key);
+        String value;
+        try {
+            value = stringTable.get(key);
+        } catch (LoadOrSaveException | DatabaseFileStructureException e) {
+            throw new DatabaseException(e);
+        }
+        Storeable oldValue = get(key);
+        if (value != null) {
+            if (oldValue != null) {
+                changedKeys.put(key, null);
+            }
+        } else {
+            changedKeys.remove(key);
+        }
+        return oldValue;
+    }
+
+    @Override
+    public int size() {
+        try {
+            int deletedCount = 0;
+            int addedCount = 0;
+            for (String key : changedKeys.keySet()) {
+                String value = changedKeys.get(key);
+                if (value == null) {
+                    ++deletedCount;
+                } else {
+                    if (stringTable.get(key) == null) {
+                        addedCount++;
+                    }
                 }
             }
+            return stringTable.count() + addedCount - deletedCount;
+        } catch (LoadOrSaveException | DatabaseFileStructureException e) {
+            throw new DatabaseException(e);
         }
-        return super.count() + addedCount - deletedCount;
     }
 
     @Override
-    public ArrayList<String> list() throws LoadOrSaveException, DatabaseFileStructureException {
-        Set<String> items = new TreeSet<>(super.list());
-        for (String key : changedKeys.keySet()) {
-            String value = changedKeys.get(key);
-            if (value == null) {
-                items.remove(key);
-            } else {
-                items.add(key);
+    public int commit() throws IOException {
+        int changes = changesCount();
+        try {
+            for (String key : changedKeys.keySet()) {
+                String value = changedKeys.get(key);
+                if (value == null) {
+                    stringTable.remove(key);
+                } else {
+                    stringTable.put(key, value);
+                }
             }
+            changedKeys.clear();
+            stringTable.save();
+        } catch (DatabaseFileStructureException | LoadOrSaveException e) {
+            throw new IOException(e.getMessage(), e);
         }
-        ArrayList<String> result = new ArrayList<>(items.size());
-        items.forEach(new Consumer<String>() {
-            @Override
-            public void accept(String s) {
-                result.add(s);
-            }
-        });
-        return result;
+        return 0;
     }
 
     public int changesCount() {
         return changedKeys.size();
     }
 
-    public int commit(){
-        int changes = changesCount();
-        save();
-        return changes;
-    }
-
+    @Override
     public int rollback() {
         int changes = changesCount();
         changedKeys.clear();
-        initParts();
         return changes;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public Storeable get(String key) {
+        checkKeyNotNull(key);
+        try {
+            return database.deserialize(this, getString(key));
+        } catch (ParseException | LoadOrSaveException | DatabaseFileStructureException e) {
+            throw new DatabaseException(e);
+        }
     }
 
     @Override
     public int getColumnsCount() {
-        return 0;
+        return columnTypes.size();
     }
 
     @Override
     public Class<?> getColumnType(int columnIndex) throws IndexOutOfBoundsException {
-        return null;
+        return columnTypes.get(columnIndex);
     }
 
-    public void drop() {
-        //TODO
-        throw new NotImplementedException();
+    public void drop() throws DatabaseFileStructureException, LoadOrSaveException {
+        stringTable.drop();
     }
 }

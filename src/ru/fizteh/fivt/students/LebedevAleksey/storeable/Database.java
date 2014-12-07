@@ -6,19 +6,13 @@ import ru.fizteh.fivt.storage.structured.Table;
 import ru.fizteh.fivt.storage.structured.TableProvider;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.BrokenJsonException;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonParser;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
+import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonUnsupportedObjectException;
 
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.ParseException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
 public class Database implements TableProvider {
     public static final String TABLE_SIGNATURE_FILE_NAME = "signature.tsv";
@@ -44,12 +38,48 @@ public class Database implements TableProvider {
 
     }
 
-    private final Path directoryPath;
+    private Path directoryPath;
     private Map<String, StoreableTable> tables = new TreeMap<>();
 
 
-    public Database(String directory) {
-        directoryPath = new File(directory).toPath();
+    public Database(String directory) throws IOException {
+        File root = new File(directory);
+        directoryPath = root.toPath();
+        File[] tables = root.listFiles();
+        for (File file : tables) {
+            if (file.isDirectory()) {
+                File signature = file.toPath().resolve(TABLE_SIGNATURE_FILE_NAME).toFile();
+                String tablename = file.getName();
+                if (signature.exists() && signature.isFile()) {
+                    String signatureString;
+                    try (FileInputStream stream = new FileInputStream(signature.getAbsolutePath())) {
+                        try (DataInputStream signaturedata = new DataInputStream(stream)) {
+                            signatureString = signaturedata.readUTF();
+                        }
+                    }
+                    String[] tokens = signatureString.split(" ");
+                    List<Class<?>> types = new ArrayList<>();
+                    for (String item : tokens) {
+                        Class<?> type = stringTypesMap.get(item);
+                        if (type == null) {
+                            throw new IOException("Wrong type name in signature of table " + tablename);
+                        } else {
+                            types.add(type);
+                        }
+                    }
+                    StoreableTable table = new StoreableTable(tablename, this, types);
+                    this.tables.put(tablename, table);
+                } else {
+                    throw new IOException("Where is not signature file in table " + tablename);
+                }
+            } else {
+                fileFoundInRootDirectory(file);
+            }
+        }
+    }
+
+    protected void fileFoundInRootDirectory(File file) throws IOException {
+        throw new IOException("There is file " + file.getName() + " in root directory");
     }
 
     private void assertNameNotNull(String name) {
@@ -77,7 +107,8 @@ public class Database implements TableProvider {
                 String tableSignature = createTableSignature(columnTypes);
                 try {
                     Files.createDirectory(path);
-                    try (FileOutputStream stream = new FileOutputStream(path.resolve(TABLE_SIGNATURE_FILE_NAME).toString())) {
+                    try (FileOutputStream stream = new FileOutputStream(path.resolve(
+                            TABLE_SIGNATURE_FILE_NAME).toString())) {
                         try (DataOutputStream dataStream = new DataOutputStream(stream)) {
                             dataStream.writeUTF(tableSignature);
                             dataStream.flush();
@@ -124,7 +155,7 @@ public class Database implements TableProvider {
     }
 
     private StoreableTable generateTable(String name) {
-        return new StoreableTable(name, this);
+        return new StoreableTable(name, this, types);
     }
 
     @Override
@@ -137,19 +168,82 @@ public class Database implements TableProvider {
 
     @Override
     public Storeable deserialize(Table table, String value) throws ParseException {
+        List<Object> data;
         try {
-            JsonParser.parseJson(value);
+            data = (List<Object>) JsonParser.parseJson(value);
         } catch (BrokenJsonException e) {
             throw new ParseException("Can't parse JSON: " + e.getMessage(), e.getOffsetError());
+        } catch (ClassCastException e) {
+            throw new ParseException("Wrong JSON: not a list", 0);
         }
-        return null;
+        if (data.size() == table.getColumnsCount()) {
+            Storeable storable = createFor(table);
+            for (int i = 0; i < data.size(); i++) {
+                if (data.get(i) == null) {
+                    storable.setColumnAt(i, 0);
+                } else if (data.get(i).getClass() == table.getColumnType(i)) {
+                    storable.setColumnAt(i, data.get(i));
+                } else if (!tryCastInteger(table, i, data.get(i), storable) &&
+                        !tryCastFloat(table, i, data.get(i), storable)) {
+                    throw new ParseException("Wrong data type in column number " + i, -1);
+                }
+            }
+            return storable;
+        } else {
+            throw new ParseException("Wrong size of list: have " + data.size() + ", table have " +
+                    table.getColumnsCount() + " columns.", value.length() - 1);
+        }
+    }
+
+    private boolean tryCastInteger(Table table, int column, Object value, Storeable result) {
+        if (table.getColumnType(column) == Integer.class || table.getColumnType(column) == Byte.class) {
+            if (value.getClass() == Long.class) {
+                if (table.getColumnType(column) == Integer.class) {
+                    long val = (long) value;
+                    if (val >= Integer.MIN_VALUE && val <= Integer.MAX_VALUE) {
+                        result.setColumnAt(column, (int) value);
+                        return true;
+                    }
+                } else {
+                    if (table.getColumnType(column) == Byte.class) {
+                        long val = (long) value;
+                        if (val >= Byte.MIN_VALUE && val <= Byte.MAX_VALUE) {
+                            result.setColumnAt(column, (byte) val);
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean tryCastFloat(Table table, int column, Object value, Storeable result) {
+        if (table.getColumnType(column) == Float.class) {
+            if (value.getClass() == Double.class) {
+                if (table.getColumnType(column) == Float.class) {
+                    double val = (double) value;
+                    if (val >= Float.MIN_VALUE && val <= Float.MAX_VALUE) {
+                        result.setColumnAt(column, (float) val);
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     @Override
     public String serialize(Table table, Storeable value) throws ColumnFormatException {
-        //TODO
-        throw new NotImplementedException();
-        return null;
+        List<Object> data = new ArrayList<>();
+        for (int i = 0; i < table.getColumnsCount(); i++) {
+            data.add(value.getColumnAt(i));
+        }
+        try {
+            return JsonParser.getJson(data);
+        } catch (JsonUnsupportedObjectException e) {
+            throw new ColumnFormatException("Unknown column format", e);
+        }
     }
 
     @Override
@@ -160,6 +254,6 @@ public class Database implements TableProvider {
 
     @Override
     public Storeable createFor(Table table, List<?> values) throws ColumnFormatException, IndexOutOfBoundsException {
-        return new ru.fizteh.fivt.students.LebedevAleksey.storeable.Storeable(values, table);
+        return new ru.fizteh.fivt.students.LebedevAleksey.storeable.Storeable((List<Object>) values, table);
     }
 }
