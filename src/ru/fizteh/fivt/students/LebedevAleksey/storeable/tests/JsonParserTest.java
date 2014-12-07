@@ -4,21 +4,21 @@ import org.junit.Assert;
 import org.junit.Test;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.BrokenJsonException;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonParser;
-import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonUnsopportedObjectException;
+import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonUnsupportedObjectException;
 
 import java.io.File;
 import java.util.*;
 
 public class JsonParserTest {
     @Test
-    public void testGetJsonForStrings() throws JsonUnsopportedObjectException {
+    public void testGetJsonForStrings() throws JsonUnsupportedObjectException {
         Assert.assertEquals("\"Qwerty\"", JsonParser.getJson("Qwerty"));
         Assert.assertEquals("\"Test text\"", JsonParser.getJson("Test text"));
         Assert.assertEquals("\"Text, fore test. Asdf!\"", JsonParser.getJson("Text, fore test. Asdf!"));
     }
 
     @Test
-    public void testGetJsonForStringsWithCaracters() throws JsonUnsopportedObjectException {
+    public void testGetJsonForStringsWithCaracters() throws JsonUnsupportedObjectException {
         Assert.assertEquals("\"Qwe\\nrty\"", JsonParser.getJson("Qwe\nrty"));
         Assert.assertEquals("\"Qwe\\re r\\ty\"", JsonParser.getJson("Qwe\re r\ty"));
         Assert.assertEquals("\"This is quote: \\\"test\\\".\"", JsonParser.getJson("This is quote: \"test\"."));
@@ -26,14 +26,14 @@ public class JsonParserTest {
         Assert.assertEquals("\"\\f\"", JsonParser.getJson("\f"));
     }
 
-    @Test(expected = JsonUnsopportedObjectException.class)
-    public void testThrowExceptionForUnknownTypes() throws JsonUnsopportedObjectException {
+    @Test(expected = JsonUnsupportedObjectException.class)
+    public void testThrowExceptionForUnknownTypes() throws JsonUnsupportedObjectException {
         JsonParser.getJson(new File("."));
     }
 
 
     @Test()
-    public void testCanSerialiseIntegers() throws JsonUnsopportedObjectException {
+    public void testCanSerialiseIntegers() throws JsonUnsupportedObjectException {
         Assert.assertEquals("1234", JsonParser.getJson(1234));
         Assert.assertEquals("123456789012345", JsonParser.getJson(123456789012345L));
         Assert.assertEquals("-4567", JsonParser.getJson(-4567));
@@ -49,30 +49,30 @@ public class JsonParserTest {
     }
 
     @Test()
-    public void testCanSerialiseBools() throws JsonUnsopportedObjectException {
+    public void testCanSerialiseBools() throws JsonUnsupportedObjectException {
         Assert.assertEquals("true", JsonParser.getJson(true));
         Assert.assertEquals("false", JsonParser.getJson(false));
     }
 
     @Test()
-    public void testCanSerialiseNull() throws JsonUnsopportedObjectException {
+    public void testCanSerialiseNull() throws JsonUnsupportedObjectException {
         Assert.assertEquals("null", JsonParser.getJson(null));
     }
 
     @Test
-    public void testCanGetJsonForArrays() throws JsonUnsopportedObjectException {
+    public void testCanGetJsonForArrays() throws JsonUnsupportedObjectException {
         Assert.assertEquals("[123,\"QwertY\"]", JsonParser.getJson(Arrays.asList(new Object[]{123, "QwertY"})));
         Assert.assertEquals("[123,\"QwertY\",true]", JsonParser.getJson(new Object[]{123, "QwertY", true}));
     }
 
 
     @Test
-    public void testCanGetJsonForMap() throws JsonUnsopportedObjectException {
+    public void testCanGetJsonForMap() throws JsonUnsupportedObjectException {
         checkMap(new TreeMap<>());
         checkMap(new HashMap<>());
     }
 
-    private void checkMap(Map<String, Object> map) throws JsonUnsopportedObjectException {
+    private void checkMap(Map<String, Object> map) throws JsonUnsupportedObjectException {
         map.put("b", true);
         map.put("c", null);
         map.put("dd", 3.1415);
@@ -101,7 +101,7 @@ public class JsonParserTest {
     }
 
     private int assertMapJson(Map<String, Object> map, String[] strings, int equalsCount)
-            throws JsonUnsopportedObjectException {
+            throws JsonUnsupportedObjectException {
         if (("{" + strings[0] + "," + strings[1] + "," + strings[2] + "}").equals(JsonParser.getJson(map))) {
             ++equalsCount;
         }
@@ -109,7 +109,7 @@ public class JsonParserTest {
     }
 
     @Test
-    public void testSubItemJson() throws JsonUnsopportedObjectException {
+    public void testSubItemJson() throws JsonUnsupportedObjectException {
         Map<String, Integer> map = new TreeMap<>();
         map.put("a", 1);
         Object[] array = new Object[]{1, map, new Object[]{1.2, new Object[]{true}, null}};
@@ -117,7 +117,7 @@ public class JsonParserTest {
     }
 
     @Test
-    public void testCanJsonSupportedArrays() throws JsonUnsopportedObjectException {
+    public void testCanJsonSupportedArrays() throws JsonUnsupportedObjectException {
         Integer[] array = new Integer[]{1, 2, 3};
         Assert.assertEquals("[1,2,3]", (String) JsonParser.getJson(array));
     }
@@ -410,8 +410,8 @@ public class JsonParserTest {
     }
 
 
-    @Test(expected = JsonUnsopportedObjectException.class)
-    public void testWrongMapSerialise() throws JsonUnsopportedObjectException {
+    @Test(expected = JsonUnsupportedObjectException.class)
+    public void testWrongMapSerialise() throws JsonUnsupportedObjectException {
         Map<Integer, Integer> map = new TreeMap<>();
         map.put(1, 2);
         JsonParser.getJson(map);
