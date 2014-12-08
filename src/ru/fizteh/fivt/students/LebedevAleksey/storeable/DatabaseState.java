@@ -6,13 +6,13 @@ public class DatabaseState extends ru.fizteh.fivt.students.LebedevAleksey.MultiF
     protected Database database;
 
     public DatabaseState() {
-        //TODO
-        throw new NotImplementedException();
-        String directoryPath = System.getProperty("fizteh.db.dir");
-        if (directoryPath == null) {
-            //throw ...
-        } else {
-            database = new Database(directoryPath);
-        }
+//        //TODO
+//        throw new NotImplementedException();
+//        String directoryPath = System.getProperty("fizteh.db.dir");
+//        if (directoryPath == null) {
+//            //throw ...
+//        } else {
+//            database = new Database(directoryPath);
+//        }
     }
 }

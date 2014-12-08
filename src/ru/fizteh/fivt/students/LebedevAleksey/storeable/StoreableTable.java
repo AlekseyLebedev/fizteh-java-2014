@@ -8,10 +8,10 @@ import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.Table;
 import ru.fizteh.fivt.students.LebedevAleksey.junit.DatabaseException;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.text.ParseException;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
+import java.util.function.Consumer;
 
 public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     private final String name;
@@ -24,7 +24,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
         this.name = name;
         database = databaseParent;
         columnTypes = types;
-        Table stringTable = new Table(name, databaseParent.getRootDirectoryPath());
+        stringTable = new Table(name, databaseParent.getRootDirectoryPath());
     }
 
     private void checkKeyNotNull(String key) {
@@ -62,7 +62,12 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     public Storeable put(String key, Storeable value) throws ColumnFormatException {
         checkKeyValueNotNull(key, value);
         try {
-            return database.deserialize(this, putStrings(key, database.serialize(this, value)));
+            String result = putStrings(key, database.serialize(this, value));
+            if (result == null) {
+                return null;
+            } else {
+                return database.deserialize(this, result);
+            }
         } catch (DatabaseFileStructureException | LoadOrSaveException e) {
             throw new DatabaseException(e);
         } catch (ParseException e) {
@@ -126,9 +131,9 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
             changedKeys.clear();
             stringTable.save();
         } catch (DatabaseFileStructureException | LoadOrSaveException e) {
-            throw new IOException(e.getMessage(), e);
+            Database.throwIOException(e);
         }
-        return 0;
+        return changes;
     }
 
     public int changesCount() {
@@ -151,7 +156,12 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     public Storeable get(String key) {
         checkKeyNotNull(key);
         try {
-            return database.deserialize(this, getString(key));
+            String result = getString(key);
+            if (result == null) {
+                return null;
+            } else {
+                return database.deserialize(this, result);
+            }
         } catch (ParseException | LoadOrSaveException | DatabaseFileStructureException e) {
             throw new DatabaseException(e);
         }
@@ -168,6 +178,36 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     }
 
     public void drop() throws DatabaseFileStructureException, LoadOrSaveException {
+        Path signatureFile = database.getRootDirectoryPath().resolve(getName()).
+                resolve(Database.TABLE_SIGNATURE_FILE_NAME);
+        if (!signatureFile.toFile().delete()) {
+            throw new LoadOrSaveException("Can't delete signature file for table " + getName());
+        }
         stringTable.drop();
+    }
+
+    public List<String> list() throws IOException {
+        try {
+            Set<String> items = new TreeSet<>(stringTable.list());
+            for (String key : changedKeys.keySet()) {
+                String value = changedKeys.get(key);
+                if (value == null) {
+                    items.remove(key);
+                } else {
+                    items.add(key);
+                }
+            }
+            final ArrayList<String> result = new ArrayList<>(items.size());
+            items.forEach(new Consumer<String>() {
+                @Override
+                public void accept(String s) {
+                    result.add(s);
+                }
+            });
+            return result;
+        } catch (DatabaseFileStructureException | LoadOrSaveException e) {
+            Database.throwIOException(e);
+            return null; // unreached
+        }
     }
 }

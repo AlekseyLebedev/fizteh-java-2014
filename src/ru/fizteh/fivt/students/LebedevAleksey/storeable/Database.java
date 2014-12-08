@@ -4,6 +4,8 @@ import ru.fizteh.fivt.storage.structured.ColumnFormatException;
 import ru.fizteh.fivt.storage.structured.Storeable;
 import ru.fizteh.fivt.storage.structured.Table;
 import ru.fizteh.fivt.storage.structured.TableProvider;
+import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.DatabaseFileStructureException;
+import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.LoadOrSaveException;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.BrokenJsonException;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonParser;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonUnsupportedObjectException;
@@ -13,12 +15,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.*;
+import java.util.function.BiConsumer;
 
 public class Database implements TableProvider {
     public static final String TABLE_SIGNATURE_FILE_NAME = "signature.tsv";
     private static final String INCORRECT_NAME_OF_TABLES = "This name is not correct, folder can't be created";
-    private static Map<String, Class<?>> stringTypesMap = new TreeMap<>();
-    private static Map<Class<?>, String> typesStringMap = new TreeMap<>();
+    private static Map<String, Class<?>> stringTypesMap = new HashMap<>();
+    private static Map<Class, String> typesStringMap = new HashMap<>();
 
     static {
         stringTypesMap.put("int", Integer.class);
@@ -28,21 +31,20 @@ public class Database implements TableProvider {
         stringTypesMap.put("double", Double.class);
         stringTypesMap.put("boolean", Boolean.class);
         stringTypesMap.put("String", String.class);
-        typesStringMap.put(Integer.class, "int");
-        typesStringMap.put(Long.class, "long");
-        typesStringMap.put(Byte.class, "byte");
-        typesStringMap.put(Float.class, "float");
-        typesStringMap.put(java.lang.Double.class, "double");
-        typesStringMap.put(Boolean.class, "boolean");
-        typesStringMap.put(String.class, "String");
-
+        stringTypesMap.forEach(new BiConsumer<String, Class<?>>() {
+            @Override
+            public void accept(String alias, Class<?> type) {
+                typesStringMap.put(type, alias);
+            }
+        });
     }
 
     private Path directoryPath;
-    private Map<String, StoreableTable> tables = new TreeMap<>();
+    private Map<String, StoreableTable> tables = new HashMap<>();
 
 
     public Database(String directory) throws IOException {
+        assertArgumentNotNull(directory, "directory");
         File root = new File(directory);
         directoryPath = root.toPath();
         File[] tables = root.listFiles();
@@ -67,7 +69,7 @@ public class Database implements TableProvider {
                             types.add(type);
                         }
                     }
-                    StoreableTable table = new StoreableTable(tablename, this, types);
+                    StoreableTable table = generateTable(tablename, types);
                     this.tables.put(tablename, table);
                 } else {
                     throw new IOException("Where is not signature file in table " + tablename);
@@ -78,24 +80,32 @@ public class Database implements TableProvider {
         }
     }
 
+    public static void throwIOException(Exception e) throws IOException {
+        if (e.getCause() != null) {
+            try {
+                IOException ioException = (IOException) e.getCause();
+                throw ioException;
+            } catch (ClassCastException wrongClass) {
+                //Not IOException
+            }
+            throw new IOException(e.getMessage(), e);
+        }
+    }
+
     protected void fileFoundInRootDirectory(File file) throws IOException {
         throw new IOException("There is file " + file.getName() + " in root directory");
     }
 
-    private void assertNameNotNull(String name) {
-        if (name == null) {
-            throw new IllegalArgumentException("Argument \"name\" is null");
-        }
-    }
-
     @Override
     public Table getTable(String name) {
-        assertNameNotNull(name);
+        assertArgumentNotNull(name, "name");
         return tables.get(name);
     }
 
     @Override
     public Table createTable(String name, List<Class<?>> columnTypes) throws IOException {
+        assertArgumentNotNull(name, "name");
+        assertArgumentNotNull(columnTypes, "columnTypes");
         Table checkExists = getTable(name);
         if (checkExists == null) {
             Path rootDirectoryPath = getRootDirectoryPath();
@@ -122,7 +132,7 @@ public class Database implements TableProvider {
                     }
                     throw ex;
                 }
-                StoreableTable table = generateTable(name);
+                StoreableTable table = generateTable(name, columnTypes);
                 tables.put(name, table);
                 return table;
             } else {
@@ -139,7 +149,7 @@ public class Database implements TableProvider {
             if (column == null) {
                 throw new IllegalArgumentException("Null column");
             }
-            Class<?> type = stringTypesMap.get(column);
+            String type = typesStringMap.get(column);
             if (type == null) {
                 throw new IllegalArgumentException("Type is not supported");
             }
@@ -154,20 +164,29 @@ public class Database implements TableProvider {
         return directoryPath;
     }
 
-    private StoreableTable generateTable(String name) {
+    private StoreableTable generateTable(String name, List<Class<?>> types) {
         return new StoreableTable(name, this, types);
     }
 
     @Override
     public void removeTable(String name) throws IOException {
+        assertArgumentNotNull(name, "name");
         StoreableTable table = (StoreableTable) getTable(name);
-        table.drop();
-        tables.remove(table);
-        Files.delete(directoryPath.resolve(name));
+        if (table == null) {
+            throw new IllegalStateException("There is no table with name \"" + name + "\"");
+        }
+        try {
+            table.drop();
+        } catch (DatabaseFileStructureException | LoadOrSaveException e) {
+            throwIOException(e);
+        }
+        tables.remove(name);
     }
 
     @Override
     public Storeable deserialize(Table table, String value) throws ParseException {
+        assertArgumentNotNull(table, "table");
+        assertArgumentNotNull(value, "value");
         List<Object> data;
         try {
             data = (List<Object>) JsonParser.parseJson(value);
@@ -235,6 +254,8 @@ public class Database implements TableProvider {
 
     @Override
     public String serialize(Table table, Storeable value) throws ColumnFormatException {
+        assertArgumentNotNull(table, "table");
+        assertArgumentNotNull(value, "value");
         List<Object> data = new ArrayList<>();
         for (int i = 0; i < table.getColumnsCount(); i++) {
             data.add(value.getColumnAt(i));
@@ -248,12 +269,21 @@ public class Database implements TableProvider {
 
     @Override
     public Storeable createFor(Table table) {
+        assertArgumentNotNull(table, "table");
         return new ru.fizteh.fivt.students.LebedevAleksey.storeable.Storeable(Arrays.asList(
                 new Object[table.getColumnsCount()]), table);
     }
 
     @Override
     public Storeable createFor(Table table, List<?> values) throws ColumnFormatException, IndexOutOfBoundsException {
+        assertArgumentNotNull(table, "table");
+        assertArgumentNotNull(values, "values");
         return new ru.fizteh.fivt.students.LebedevAleksey.storeable.Storeable((List<Object>) values, table);
+    }
+
+    private void assertArgumentNotNull(Object argument, String name) {
+        if (argument == null) {
+            throw new IllegalArgumentException("Argument \"" + name + "\" is null");
+        }
     }
 }
