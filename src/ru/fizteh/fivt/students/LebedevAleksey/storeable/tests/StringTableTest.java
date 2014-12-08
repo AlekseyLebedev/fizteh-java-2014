@@ -41,6 +41,13 @@ public class StringTableTest {
                 (Database) database);
     }
 
+
+    protected void getTable() throws IOException {
+        database = new DatabaseFactory().create(dbPath.getPath());
+        table = StringTableWrapper.create(database.getTable(TEST_TABLE_NAME),
+                (Database) database);
+    }
+
     @After
     public void tearDown() throws Exception {
         database.removeTable(TEST_TABLE_NAME);
@@ -398,7 +405,7 @@ public class StringTableTest {
 
     private int checkCommit() throws IOException {
         int changes = table.commit();
-        createTable();
+        getTable();
         Path tablePath = dbPath.toPath().resolve(TEST_TABLE_NAME);
         File[] directories = tablePath.toFile().listFiles();
         for (File dir : directories) {
