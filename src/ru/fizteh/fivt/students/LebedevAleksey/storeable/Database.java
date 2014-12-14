@@ -6,6 +6,8 @@ import ru.fizteh.fivt.storage.structured.Table;
 import ru.fizteh.fivt.storage.structured.TableProvider;
 import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.DatabaseFileStructureException;
 import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.LoadOrSaveException;
+import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.Pair;
+import ru.fizteh.fivt.students.LebedevAleksey.junit.DatabaseException;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.BrokenJsonException;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonParser;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.json.JsonUnsupportedObjectException;
@@ -80,7 +82,7 @@ public class Database implements TableProvider {
         }
     }
 
-    public static void throwIOException(Exception e) throws IOException {
+    public static void throwIOException(Throwable e) throws IOException {
         if (e.getCause() != null) {
             try {
                 IOException ioException = (IOException) e.getCause();
@@ -88,8 +90,21 @@ public class Database implements TableProvider {
             } catch (ClassCastException wrongClass) {
                 //Not IOException
             }
-            throw new IOException(e.getMessage(), e);
         }
+        throw new IOException(e.getMessage(), e);
+    }
+
+    public static List<Class<?>> ParseTypes(String[] input) throws ParseException {
+        List<Class<?>> types = new ArrayList<>(input.length);
+        for (String item : input) {
+            Class<?> type = stringTypesMap.get(item);
+            if (type != null) {
+                types.add(type);
+            } else {
+                throw new ParseException("Wrong type: " + item, -1);
+            }
+        }
+        return types;
     }
 
     protected void fileFoundInRootDirectory(File file) throws IOException {
@@ -285,5 +300,20 @@ public class Database implements TableProvider {
         if (argument == null) {
             throw new IllegalArgumentException("Argument \"" + name + "\" is null");
         }
+    }
+
+    public List<Pair<String, Integer>> listTables() throws IOException {
+        final List<Pair<String, Integer>> result = new ArrayList<>(tables.size());
+        try {
+            tables.forEach(new BiConsumer<String, StoreableTable>() {
+                @Override
+                public void accept(String s, StoreableTable table) {
+                    result.add(new Pair<String, Integer>(s, table.size()));
+                }
+            });
+        } catch (DatabaseException e) {
+            throwIOException(e.getCause());
+        }
+        return result;
     }
 }

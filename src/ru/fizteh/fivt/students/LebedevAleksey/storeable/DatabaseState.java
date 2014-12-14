@@ -1,18 +1,33 @@
 package ru.fizteh.fivt.students.LebedevAleksey.storeable;
 
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
+import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.DatabaseFileStructureException;
+import ru.fizteh.fivt.students.LebedevAleksey.storeable.interpreter.InterpreterState;
 
-public class DatabaseState extends ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.InterpreterState {
-    protected Database database;
+import java.io.IOException;
 
-    public DatabaseState() {
-//        //TODO
-//        throw new NotImplementedException();
-//        String directoryPath = System.getProperty("fizteh.db.dir");
-//        if (directoryPath == null) {
-//            //throw ...
-//        } else {
-//            database = new Database(directoryPath);
-//        }
+public class DatabaseState extends InterpreterState {
+    private Database database;
+    private StoreableTable table;
+
+    public StoreableTable getCurrentTable() {
+        return table;
+    }
+
+    public void setCurrentTable(StoreableTable table) {
+        this.table = table;
+    }
+
+    public Database getDatabase() {
+        return database;
+    }
+
+
+    public DatabaseState() throws IOException, DatabaseFileStructureException {
+        String directoryPath = System.getProperty("fizteh.db.dir");
+        if (directoryPath == null) {
+            throw new DatabaseFileStructureException("Database directory doesn't set");
+        } else {
+            database = new Database(directoryPath);
+        }
     }
 }
