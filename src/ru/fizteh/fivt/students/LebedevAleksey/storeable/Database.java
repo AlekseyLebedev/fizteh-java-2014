@@ -298,6 +298,15 @@ public class Database implements TableProvider {
         return new ru.fizteh.fivt.students.LebedevAleksey.storeable.Storeable((List<Object>) values, table);
     }
 
+    @Override
+    public List<String> getTableNames() {
+        final List<String> result = new ArrayList<>(tables.size());
+        tables.keySet().forEach((String s) -> {
+            result.add(s);
+        });
+        return result;
+    }
+
     private void assertArgumentNotNull(Object argument, String name) {
         if (argument == null) {
             throw new IllegalArgumentException("Argument \"" + name + "\" is null");

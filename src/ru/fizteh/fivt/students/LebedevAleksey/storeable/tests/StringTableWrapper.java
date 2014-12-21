@@ -82,10 +82,6 @@ public class StringTableWrapper implements ru.fizteh.fivt.storage.strings.Table 
 
     @Override
     public List<String> list() {
-        try {
-            return table.list();
-        } catch (IOException e) {
-            throw new DatabaseException(e);
-        }
+        return table.list();
     }
 }

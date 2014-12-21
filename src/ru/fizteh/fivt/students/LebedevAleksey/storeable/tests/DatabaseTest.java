@@ -208,7 +208,7 @@ public class DatabaseTest {
     }
 
     @Test
-    public void testGetTableNames() throws Exception {
+    public void testListTables() throws Exception {
         database.createTable("t1", Arrays.asList(String.class, Integer.class, Boolean.class));
         database.createTable("t2", Arrays.asList(Double.class, String.class, Long.class));
         List<Pair<String, Integer>> real = ((Database) database).listTables();
@@ -217,6 +217,18 @@ public class DatabaseTest {
         Assert.assertEquals(0, (int) real.get(1).getValue());
         String s1 = real.get(0).getKey();
         String s2 = real.get(1).getKey();
+        Assert.assertTrue((s1.equals("t1") && s2.equals("t2")) || (s1.equals("t2") && s2.equals("t1")));
+    }
+
+
+    @Test
+    public void testGetTableNames() throws Exception {
+        database.createTable("t1", Arrays.asList(String.class, Integer.class, Boolean.class));
+        database.createTable("t2", Arrays.asList(Double.class, String.class, Long.class));
+        List<String> real = ((Database) database).getTableNames();
+        Assert.assertEquals(2, real.size());
+        String s1 = real.get(0);
+        String s2 = real.get(1);
         Assert.assertTrue((s1.equals("t1") && s2.equals("t2")) || (s1.equals("t2") && s2.equals("t1")));
     }
 }

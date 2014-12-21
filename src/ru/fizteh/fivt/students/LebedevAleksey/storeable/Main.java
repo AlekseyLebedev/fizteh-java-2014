@@ -186,7 +186,7 @@ public class Main {
                     }
                     streams.getOut().println();
                     return true;
-                } catch (IOException | DatabaseException e) {
+                } catch (DatabaseException e) {
                     streams.getErr().println(e.getMessage());
                     return false;
                 } catch (TableNotFoundException e) {

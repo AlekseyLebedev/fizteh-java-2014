@@ -148,6 +148,11 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     }
 
     @Override
+    public int getNumberOfUncommittedChanges() {
+        return changesCount();
+    }
+
+    @Override
     public String getName() {
         return name;
     }
@@ -186,7 +191,8 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
         stringTable.drop();
     }
 
-    public List<String> list() throws IOException {
+    @Override
+    public List<String> list() {
         try {
             Set<String> items = new TreeSet<>(stringTable.list());
             for (String key : changedKeys.keySet()) {
@@ -206,8 +212,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
             });
             return result;
         } catch (DatabaseFileStructureException | LoadOrSaveException e) {
-            Database.throwIOException(e);
-            return null; // unreached
+            throw new DatabaseException(e);
         }
     }
 }
