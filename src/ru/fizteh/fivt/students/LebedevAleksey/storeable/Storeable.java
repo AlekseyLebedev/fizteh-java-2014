@@ -34,10 +34,14 @@ public class Storeable implements ru.fizteh.fivt.storage.structured.Storeable {
 
     @Override
     public void setColumnAt(int columnIndex, Object value) throws ColumnFormatException, IndexOutOfBoundsException {
-        if (table.getColumnType(columnIndex) == value.getClass()) {
+        if (value == null) {
             data.set(columnIndex, value);
         } else {
-            throw new ColumnFormatException(INCORRECT_TYPE_MESSAGE);
+            if (table.getColumnType(columnIndex) == value.getClass()) {
+                data.set(columnIndex, value);
+            } else {
+                throw new ColumnFormatException(INCORRECT_TYPE_MESSAGE);
+            }
         }
     }
 
@@ -48,7 +52,7 @@ public class Storeable implements ru.fizteh.fivt.storage.structured.Storeable {
 
     @Override
     public Integer getIntAt(int columnIndex) throws ColumnFormatException, IndexOutOfBoundsException {
-        return (Integer) assertColumnType(columnIndex, int.class);
+        return (Integer) assertColumnType(columnIndex, Integer.class);
     }
 
     private Object assertColumnType(int columnIndex, Class<?> type) {
@@ -61,27 +65,27 @@ public class Storeable implements ru.fizteh.fivt.storage.structured.Storeable {
 
     @Override
     public Long getLongAt(int columnIndex) throws ColumnFormatException, IndexOutOfBoundsException {
-        return (Long) assertColumnType(columnIndex, long.class);
+        return (Long) assertColumnType(columnIndex, Long.class);
     }
 
     @Override
     public Byte getByteAt(int columnIndex) throws ColumnFormatException, IndexOutOfBoundsException {
-        return (byte) assertColumnType(columnIndex, byte.class);
+        return (byte) assertColumnType(columnIndex, Byte.class);
     }
 
     @Override
     public Float getFloatAt(int columnIndex) throws ColumnFormatException, IndexOutOfBoundsException {
-        return (float) assertColumnType(columnIndex, float.class);
+        return (float) assertColumnType(columnIndex, Float.class);
     }
 
     @Override
     public Double getDoubleAt(int columnIndex) throws ColumnFormatException, IndexOutOfBoundsException {
-        return (double) assertColumnType(columnIndex, double.class);
+        return (double) assertColumnType(columnIndex, Double.class);
     }
 
     @Override
     public Boolean getBooleanAt(int columnIndex) throws ColumnFormatException, IndexOutOfBoundsException {
-        return (boolean) assertColumnType(columnIndex, boolean.class);
+        return (boolean) assertColumnType(columnIndex, Boolean.class);
     }
 
     @Override

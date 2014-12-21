@@ -235,14 +235,14 @@ public class Database implements TableProvider {
                 if (table.getColumnType(column) == Integer.class) {
                     long val = (long) value;
                     if (val >= Integer.MIN_VALUE && val <= Integer.MAX_VALUE) {
-                        result.setColumnAt(column, (int) value);
+                        result.setColumnAt(column, new Integer((int) val));
                         return true;
                     }
                 } else {
                     if (table.getColumnType(column) == Byte.class) {
                         long val = (long) value;
                         if (val >= Byte.MIN_VALUE && val <= Byte.MAX_VALUE) {
-                            result.setColumnAt(column, (byte) val);
+                            result.setColumnAt(column, new Byte((byte) val));
                             return true;
                         }
                     }
@@ -257,7 +257,7 @@ public class Database implements TableProvider {
             if (value.getClass() == Double.class) {
                 if (table.getColumnType(column) == Float.class) {
                     double val = (double) value;
-                    if (val >= Float.MIN_VALUE && val <= Float.MAX_VALUE) {
+                    if (Math.abs(val) >= Float.MIN_VALUE && val <= Float.MAX_VALUE) {
                         result.setColumnAt(column, (float) val);
                         return true;
                     }

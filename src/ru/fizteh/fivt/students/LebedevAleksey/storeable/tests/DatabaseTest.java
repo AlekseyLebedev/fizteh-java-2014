@@ -2,31 +2,32 @@ package ru.fizteh.fivt.students.LebedevAleksey.storeable.tests;
 
 import org.junit.*;
 import org.junit.rules.TemporaryFolder;
+import ru.fizteh.fivt.storage.structured.ColumnFormatException;
+import ru.fizteh.fivt.storage.structured.Storeable;
+import ru.fizteh.fivt.storage.structured.Table;
 import ru.fizteh.fivt.storage.structured.TableProvider;
 import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.DatabaseFileStructureException;
 import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.LoadOrSaveException;
+import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.Pair;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.Database;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.DatabaseFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
 
 public class DatabaseTest {
 
-    @ClassRule
-    public static TemporaryFolder folder = new TemporaryFolder();
-    private static File dbPath;
-    private static TableProvider db;
-
-    @BeforeClass
-    public static void setUpClass() throws IOException {
-        dbPath = folder.newFolder("db");
-        db = new DatabaseFactory().create(dbPath.getAbsolutePath());
-    }
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
+    private File dbPath;
+    private TableProvider database;
 
     @Before
-    public void setUp() throws Exception {
-
+    public void setUp() throws IOException {
+        dbPath = folder.newFolder("db");
+        database = new DatabaseFactory().create(dbPath.getAbsolutePath());
     }
 
     @After
@@ -85,42 +86,119 @@ public class DatabaseTest {
     }
 
     @Test
-    public void testGetTable() throws Exception {
+    public void testGetAndCreateNonExistentTable() throws Exception {
+        database.createTable("test", Arrays.asList(String.class));
+        Assert.assertNotNull(database.getTable("test"));
+        Assert.assertEquals("test", database.getTable("test").getName());
+    }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testCreateTableNullName() throws Exception {
+        database.createTable(null, Arrays.asList(String.class));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testCreateTableNullTypes() throws Exception {
+        database.createTable("abc", null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testCreateTableNullInList() throws Exception {
+        database.createTable("abc", Arrays.asList(Integer.class, null));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testRemoveNull() throws Exception {
+        database.removeTable(null);
     }
 
     @Test
-    public void testCreateTable() throws Exception {
-
+    public void testCreateExistingTable() throws Exception {
+        database.createTable("table", Arrays.asList(String.class, Integer.class, Boolean.class));
+        Assert.assertNull(database.createTable("table", Arrays.asList(String.class, Integer.class, Boolean.class)));
     }
 
     @Test
-    public void testGetRootDirectoryPath() throws Exception {
+    public void testRemoveExistingTable() throws Exception {
+        database.createTable("table", Arrays.asList(String.class, Integer.class, Boolean.class));
+        database.removeTable("table");
+        Assert.assertNull(database.getTable("table"));
+        Assert.assertNotNull(database.createTable("table", Arrays.asList(String.class,
+                Long.class, Double.class)));
+    }
 
+    @Test(expected = IllegalStateException.class)
+    public void testRemoveNotExistentTable() throws Exception {
+        database.removeTable("notExist");
     }
 
     @Test
-    public void testRemoveTable() throws Exception {
-
-    }
-
-    @Test
-    public void testDeserialize() throws Exception {
-
-    }
-
-    @Test
-    public void testSerialize() throws Exception {
-
+    public void testSerializeDeserialize() throws Exception {
+        Table table = database.createTable("table", Arrays.asList(
+                String.class, Integer.class, Boolean.class, Long.class, Double.class, Float.class, Byte.class));
+        List<Object> expected = Arrays.asList("qwerty", Integer.MIN_VALUE, true,
+                23L, 1.23, -3.4E4f, (byte) 127);
+        Storeable original = database.createFor(table, expected);
+        String serialized = database.serialize(table, original);
+        Storeable deserialized = database.deserialize(table, serialized);
+        for (int i = 0; i < expected.size(); i++) {
+            Assert.assertEquals(expected.get(i), deserialized.getColumnAt(i));
+        }
     }
 
     @Test
     public void testCreateFor() throws Exception {
-
+        Table table = database.createTable("table", Arrays.asList(
+                String.class, Integer.class, Boolean.class, Long.class, Double.class, Float.class, Byte.class));
+        List<Object> values = Arrays.asList("qwerty", Integer.MAX_VALUE, true,
+                -23L, -1.23, 3.4E4f, (byte) 127);
+        Storeable storeable = database.createFor(table, values);
+        for (int i = 0; i < values.size(); i++) {
+            Assert.assertEquals(values.get(i), storeable.getColumnAt(i));
+        }
     }
 
     @Test
-    public void testCreateFor1() throws Exception {
+    public void testCreateForEmptyAndStoreableSet() throws Exception {
+        Table table = database.createTable("table", Arrays.asList(
+                Integer.class, Long.class, String.class, Boolean.class, Double.class, Float.class, Byte.class));
+        Storeable actual = database.createFor(table);
+        try {
+            actual.setColumnAt(0, 1);
+            actual.setColumnAt(0, -1);
+            actual.setColumnAt(1, -3L);
+            actual.setColumnAt(2, "qwerty");
+            actual.setColumnAt(3, false);
+            actual.setColumnAt(3, true);
+            actual.setColumnAt(4, 5.5);
+            actual.setColumnAt(5, 2.3f);
+            actual.setColumnAt(6, ((byte) 1));
+            for (int i = 0; i < 7; i++) {
+                actual.setColumnAt(i, null);
+            }
+            for (int i = 2; i < 7; i++) {
+                try {
+                    actual.setColumnAt(i, 1);
+                    Assert.fail("Should be exception");
+                } catch (ColumnFormatException e) {
+                    // It's ok
+                }
+            }
+        } catch (ColumnFormatException e) {
+            Assert.fail("Error in setting column " + e);
+        }
+    }
 
+    @Test
+    public void testGetTableNames() throws Exception {
+        database.createTable("t1", Arrays.asList(String.class, Integer.class, Boolean.class));
+        database.createTable("t2", Arrays.asList(Double.class, String.class, Long.class));
+        List<Pair<String, Integer>> real = ((Database) database).listTables();
+        Assert.assertEquals(2, real.size());
+        Assert.assertEquals(0, (int) real.get(0).getValue());
+        Assert.assertEquals(0, (int) real.get(1).getValue());
+        String s1 = real.get(0).getKey();
+        String s2 = real.get(1).getKey();
+        Assert.assertTrue((s1.equals("t1") && s2.equals("t2")) || (s1.equals("t2") && s2.equals("t1")));
     }
 }
