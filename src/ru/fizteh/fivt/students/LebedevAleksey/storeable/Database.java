@@ -214,7 +214,7 @@ public class Database implements TableProvider {
             Storeable storable = createFor(table);
             for (int i = 0; i < data.size(); i++) {
                 if (data.get(i) == null) {
-                    storable.setColumnAt(i, 0);
+                    storable.setColumnAt(i, null);
                 } else if (data.get(i).getClass() == table.getColumnType(i)) {
                     storable.setColumnAt(i, data.get(i));
                 } else if (!tryCastInteger(table, i, data.get(i), storable)

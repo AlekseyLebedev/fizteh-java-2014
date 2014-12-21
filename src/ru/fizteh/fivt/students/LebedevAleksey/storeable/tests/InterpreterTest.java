@@ -316,5 +316,7 @@ public class InterpreterTest {
                 + System.lineSeparator() + "Error: Can not read" + System.lineSeparator());
         compareInteractive(commands, "tst2; exit", "$ $ ", 1, "Error: Message2"
                 + System.lineSeparator() + "Error: Can not read" + System.lineSeparator());
+        compareInteractive(commands, "qwerty", "$ $ ", 1, "Error: This command is unknown: qwerty"
+                + System.lineSeparator() + "Error: Can not read" + System.lineSeparator());
     }
 }

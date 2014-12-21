@@ -14,6 +14,7 @@ import ru.fizteh.fivt.students.LebedevAleksey.storeable.DatabaseFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -134,17 +135,34 @@ public class DatabaseTest {
 
     @Test
     public void testSerializeDeserialize() throws Exception {
-        Table table = database.createTable("table", Arrays.asList(
-                String.class, Integer.class, Boolean.class, Long.class, Double.class, Float.class, Byte.class));
+        Table table = database.createTable("table", Arrays.asList(String.class, Integer.class, Boolean.class,
+                Long.class, Double.class, Float.class, Byte.class, Byte.class));
         List<Object> expected = Arrays.asList("qwerty", Integer.MIN_VALUE, true,
-                23L, 1.23, -3.4E4f, (byte) 127);
+                23L, 1.23, -3.4E4f, (byte) 127, null);
         Storeable original = database.createFor(table, expected);
         String serialized = database.serialize(table, original);
         Storeable deserialized = database.deserialize(table, serialized);
         for (int i = 0; i < expected.size(); i++) {
             Assert.assertEquals(expected.get(i), deserialized.getColumnAt(i));
         }
+        table = database.createTable("name", Arrays.asList(Integer.class, String.class));
+        deserialized = database.deserialize(table, "[null,null]");
+        Assert.assertNull(deserialized.getColumnAt(0));
+        Assert.assertNull(deserialized.getColumnAt(1));
     }
+
+    @Test(expected = ParseException.class)
+    public void testDeserializeWrongNumberOfColumns() throws ParseException, IOException {
+        Table table = database.createTable("table", Arrays.asList(String.class, Integer.class));
+        database.deserialize(table, "[null]");
+    }
+
+    @Test(expected = ParseException.class)
+    public void testDeserializeWrongNumberOfColumns2() throws ParseException, IOException {
+        Table table = database.createTable("table", Arrays.asList(String.class, Integer.class));
+        database.deserialize(table, "[null,0,0]");
+    }
+
 
     @Test
     public void testCreateFor() throws Exception {
