@@ -63,12 +63,14 @@ public class Database implements TableProvider {
                     }
                     String[] tokens = signatureString.split(" ");
                     List<Class<?>> types = new ArrayList<>();
-                    for (String item : tokens) {
-                        Class<?> type = stringTypesMap.get(item);
-                        if (type == null) {
-                            throw new IOException("Wrong type name in signature of table " + tablename);
-                        } else {
-                            types.add(type);
+                    if (signatureString.length() != 0) {
+                        for (String item : tokens) {
+                            Class<?> type = stringTypesMap.get(item);
+                            if (type == null) {
+                                throw new IOException("Wrong type name in signature of table " + tablename);
+                            } else {
+                                types.add(type);
+                            }
                         }
                     }
                     StoreableTable table = generateTable(tablename, types);
