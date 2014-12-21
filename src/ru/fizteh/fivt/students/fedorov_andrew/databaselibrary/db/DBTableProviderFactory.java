@@ -1,70 +1,125 @@
 package ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.db;
 
-import ru.fizteh.fivt.storage.strings.TableProviderFactory;
-import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.exception.DBFileCorruptException;
-import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.exception.DatabaseException;
+import ru.fizteh.fivt.proxy.LoggingProxyFactory;
+import ru.fizteh.fivt.storage.structured.TableProviderFactory;
+import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.exception.DatabaseIOException;
+import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.support.Log;
+import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.support.LoggingProxyFactoryImpl;
+import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.support.Utility;
+import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.support.ValidityController;
+import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.support.ValidityController.KillLock;
+import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.support.ValidityController.UseLock;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.IdentityHashMap;
 
-public class DBTableProviderFactory implements TableProviderFactory {
+public final class DBTableProviderFactory implements TableProviderFactory, AutoCloseable {
+    private static final LoggingProxyFactory LOGGING_PROXY_FACTORY = new LoggingProxyFactoryImpl();
+    private static final Writer LOG_WRITER;
+
+    static {
+        Writer tempWriter;
+
+        try {
+            tempWriter = new OutputStreamWriter(new FileOutputStream("Proxy.log"));
+        } catch (IOException exc) {
+            Log.log(DBTableProviderFactory.class, exc, "Failed to create log");
+            tempWriter = null;
+        }
+
+        LOG_WRITER = tempWriter;
+    }
+
+    private final ValidityController validityController = new ValidityController();
+    private final IdentityHashMap<AutoCloseableProvider, Boolean> generatedProviders =
+            new IdentityHashMap<>();
+
+    static <T> T wrapImplementation(T implementation, Class<T> interfaceClass) {
+        if (LOG_WRITER != null) {
+            return (T) LOGGING_PROXY_FACTORY.wrap(LOG_WRITER, implementation, interfaceClass);
+        } else {
+            return implementation;
+        }
+    }
+
+    @Override
+    public synchronized void close() {
+        try (KillLock lock = validityController.useAndKill()) {
+            for (AutoCloseableProvider provider : generatedProviders.keySet()) {
+                provider.close();
+            }
+            generatedProviders.clear();
+        }
+    }
 
     /**
-     * @param databaseRoot
-     * @return
+     * Unregisters the given provider.
+     * @param provider
+     *         Pure (not proxied) link to the closed provider.
      */
-    private void checkDatabaseDirectory(final Path databaseRoot) throws DatabaseException {
+    synchronized void onProviderClosed(AutoCloseableProvider provider) {
+        try (UseLock useLock = validityController.use()) {
+            generatedProviders.remove(provider);
+        }
+    }
+
+    private void checkDatabaseDirectory(final Path databaseRoot) throws DatabaseIOException {
         if (!Files.isDirectory(databaseRoot)) {
-            throw new DBFileCorruptException("Database root must be a directory");
+            throw new DatabaseIOException("Database root must be a directory");
         }
 
         try (DirectoryStream<Path> tableDirs = Files.newDirectoryStream(databaseRoot)) {
             for (Path tableDirectory : tableDirs) {
                 if (!Files.isDirectory(tableDirectory)) {
-                    throw new DBFileCorruptException(
+                    throw new DatabaseIOException(
                             "Non-directory path found in database folder: " + tableDirectory.getFileName());
                 }
             }
         } catch (IOException exc) {
-            throw new DatabaseException(
+            throw new DatabaseIOException(
                     "Failed to scan database directory: " + exc.getMessage(), exc);
         }
     }
 
     @Override
-    public DBTableProvider create(String dir) throws IllegalArgumentException {
-        if (dir == null) {
-            throw new IllegalArgumentException("Directory must not be null");
-        }
+    protected void finalize() throws Throwable {
+        super.finalize();
+        close();
+    }
 
-        Path databaseRoot = Paths.get(dir).normalize();
-        if (!Files.exists(databaseRoot)) {
-            if (databaseRoot.getParent() == null || !Files.isDirectory(databaseRoot.getParent())) {
-                throw new IllegalArgumentException(
-                        "Database directory parent path does not exist or is not a directory");
-            }
+    @Override
+    public synchronized AutoCloseableProvider create(String dir)
+            throws IllegalArgumentException, DatabaseIOException {
+        try (UseLock useLock = validityController.use()) {
+            Utility.checkNotNull(dir, "Directory");
 
-            try {
-                Files.createDirectory(databaseRoot);
-            } catch (IOException exc) {
-                throw new IllegalArgumentException(
-                        "Failed to establish database on path " + dir, exc);
-            }
-        } else {
-            try {
+            Path databaseRoot = Paths.get(dir).normalize();
+            if (!Files.exists(databaseRoot)) {
+                if (databaseRoot.getParent() == null || !Files.isDirectory(databaseRoot.getParent())) {
+                    throw new DatabaseIOException(
+                            "Database directory parent path does not exist or is not a directory");
+                }
+
+                try {
+                    Files.createDirectory(databaseRoot);
+                } catch (IOException exc) {
+                    throw new DatabaseIOException("Failed to establish database on path " + dir, exc);
+                }
+            } else {
                 checkDatabaseDirectory(databaseRoot);
-            } catch (DatabaseException exc) {
-                throw new IllegalArgumentException(exc.getMessage(), exc);
             }
-        }
 
-        try {
-            return new DBTableProvider(databaseRoot);
-        } catch (DatabaseException exc) {
-            throw new IllegalArgumentException(exc.getMessage(), exc);
+            AutoCloseableProvider provider = new DBTableProvider(databaseRoot, this);
+            AutoCloseableProvider wrappedProvider = wrapImplementation(provider, AutoCloseableProvider.class);
+            generatedProviders.put(provider, Boolean.TRUE);
+            return wrappedProvider;
         }
     }
 }

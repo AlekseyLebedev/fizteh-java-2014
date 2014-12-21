@@ -1,7 +1,7 @@
 package ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.db;
 
-import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.exception.DBFileCorruptException;
-import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.exception.DatabaseException;
+import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.exception.DBFileCorruptIOException;
+import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.exception.DatabaseIOException;
 import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.support.Utility;
 
 import java.io.ByteArrayOutputStream;
@@ -15,25 +15,31 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * This class represents a table part implemented as usual {@link HashMap} and stored in a separate
- * file.
+ * This class represents a table part implemented as usual {@link java.util.HashMap} and stored in a separate
+ * file.<br/>
+ * This class is not thread-safe.
  * @author phoenix
  */
 public class TablePart {
-    public static final int READ_BUFFER_SIZE = 16 * 1024;
-
+    private static final int READ_BUFFER_SIZE = 16 * 1024;
+    /**
+     * A pair (key, value) describes put. A pair (key, null) describes removal.
+     */
+    private final ThreadLocal<Map<String, String>> diffMap = ThreadLocal.withInitial(HashMap::new);
     private Path tablePartFilePath;
-
-    private HashMap<String, String> tablePartMap;
-
-    private HashMap<String, String> lastCommittedMap;
+    /**
+     * Map with last changes that are written to the file system.<br/>
+     */
+    private Map<String, String> lastCommittedMap;
 
     /**
-     * Private constructor for cloning
+     * Private constructor for cloning.
      */
     private TablePart() {
 
@@ -43,8 +49,6 @@ public class TablePart {
      * Initalizes a new filemap object assigned to the specified file.<br/>
      * @param tablePartFilePath
      *         path to database file. If it does not exist, a new empty file is created.
-     * @throws ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.exception.TerminalException
-     *         if failed to create database file or {@code dbFileName} is null.
      */
     public TablePart(Path tablePartFilePath) {
         if (tablePartFilePath == null) {
@@ -53,25 +57,15 @@ public class TablePart {
 
         this.tablePartFilePath = tablePartFilePath;
 
-        tablePartMap = new HashMap<>();
         lastCommittedMap = new HashMap<>();
     }
 
-    /**
-     * Silently clones the object - no changes in file system are made.
-     */
-    @SuppressWarnings("unchecked")
-    @Override
-    public TablePart clone() {
-        TablePart fmap = new TablePart();
-        fmap.tablePartMap = (HashMap<String, String>) this.tablePartMap.clone();
-        fmap.lastCommittedMap = (HashMap<String, String>) this.lastCommittedMap.clone();
-        fmap.tablePartFilePath = this.tablePartFilePath;
-        return fmap;
-    }
-
     public String get(String key) {
-        return tablePartMap.get(key);
+        if (diffMap.get().containsKey(key)) {
+            return diffMap.get().get(key);
+        } else {
+            return lastCommittedMap.get(key);
+        }
     }
 
     public Path getTablePartFilePath() {
@@ -79,35 +73,33 @@ public class TablePart {
     }
 
     public Set<String> keySet() {
-        return tablePartMap.keySet();
+        return makeNewActualVersion().keySet();
     }
 
     public String put(String key, String value) {
-        return tablePartMap.put(key, value);
+        String oldValue = get(key);
+        diffMap.get().put(key, value);
+        return oldValue;
     }
 
     /**
-     * Reads database from file system (all previous data is purged).<br/> If an error occurs the
-     * state before this operation is recovered.
-     * @throws DBFileCorruptException
+     * Reads database from file system (all previous data is purged).<br/>
+     * If an error occurs the state before this operation is recovered.<br/>
+     * Thread-local uncommitted diffs are not effected.<br/>
+     * @throws ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.exception.DBFileCorruptIOException
      */
     @SuppressWarnings("unchecked")
-    public void readFromFile() throws DBFileCorruptException {
-    /*
-     * if an exception occurs and database is cloned, recover if cloned
-     * object is null - no recover is performed.
-     */
-        HashMap<String, String> cloneDBMap = (HashMap<String, String>) tablePartMap.clone();
-        tablePartMap.clear();
+    public void readFromFile() throws DBFileCorruptIOException {
+        // For recover purposes.
+        Map<String, String> oldLastCommittedMap = lastCommittedMap;
+        lastCommittedMap = new HashMap<>();
 
         try (DataInputStream stream = new DataInputStream(
                 new FileInputStream(
                         tablePartFilePath.toString()))) {
-        /*
-         * structure: (no spaces or newlines) <key 1 bytes>00<4
-         * bytes:offset> <key 2 bytes>00<4 bytes:offset> ... <value 1 bytes>
-         * <value 2 bytes>...
-         */
+            // Structure: (no spaces or newlines) <key 1 bytes>00<4
+            // bytes:offset> <key 2 bytes>00<4 bytes:offset> ... <value 1 bytes>
+            // <value 2 bytes>...
 
             byte[] buffer = new byte[1024];
             int bufferSize = 0;
@@ -133,7 +125,7 @@ public class TablePart {
             // reading keys and value shift information
             for (int i = 0; i < bufferSize; ) {
                 if (i == nextValue) {
-                    throw new DBFileCorruptException(
+                    throw new DBFileCorruptIOException(
                             String.format(
                                     "Attempt to read key part from %s to %s, but value should "
                                     + "start here", bufferOffset, i));
@@ -141,7 +133,7 @@ public class TablePart {
                 if (buffer[i] == 0) {
                     String currentKey = new String(buffer, bufferOffset, i - bufferOffset, "UTF-8");
                     if (i + 4 >= bufferSize) {
-                        throw new DBFileCorruptException(
+                        throw new DBFileCorruptIOException(
                                 String.format(
                                         "There is no value offset for key '%s' after byte %s",
                                         currentKey,
@@ -158,7 +150,7 @@ public class TablePart {
                     nextValue = offsets.firstKey();
 
                     if (i > nextValue) {
-                        throw new DBFileCorruptException(
+                        throw new DBFileCorruptIOException(
                                 String.format(
                                         "Value shift for key '%s' is to early: %s; current " + "position: %s",
                                         currentKey,
@@ -172,23 +164,25 @@ public class TablePart {
                 }
             }
 
-            // empty map
+            // Empty map.
             if (offsets.isEmpty()) {
                 return;
             }
 
-            // reading values
-            String currentKey = offsets.get(nextValue); // value matching this
-            // key is now being
-            // built
-            offsets.remove(nextValue); // next value start boundary
+            // Reading values.
 
-            // reading up to the last value (exclusive)
+            // Value matching this key is now being built.
+            String currentKey = offsets.get(nextValue);
+
+            // Next value start boundary.
+            offsets.remove(nextValue);
+
+            // Reading up to the last value (exclusive).
             while (!offsets.isEmpty()) {
                 nextValue = offsets.firstKey();
 
                 String value = new String(buffer, bufferOffset, nextValue - bufferOffset);
-                tablePartMap.put(currentKey, value);
+                lastCommittedMap.put(currentKey, value);
 
                 bufferOffset = nextValue;
                 currentKey = offsets.get(nextValue);
@@ -196,37 +190,81 @@ public class TablePart {
                 offsets.remove(nextValue);
             }
 
-            // putting the last value
+            // Putting the last value.
             String value = new String(buffer, bufferOffset, bufferSize - bufferOffset);
-            tablePartMap.put(currentKey, value);
+            lastCommittedMap.put(currentKey, value);
         } catch (IOException exc) {
-            // recover
-            if (cloneDBMap != null) {
-                tablePartMap = cloneDBMap;
-            }
-            throw new DBFileCorruptException(
+            // Recover.
+            lastCommittedMap = oldLastCommittedMap;
+            throw new DBFileCorruptIOException(
                     "Failed to read data from file: " + tablePartFilePath.toString(), exc);
         }
 
-        // if everything went ok
-        lastCommittedMap = new HashMap<>(tablePartMap);
+        // Everything went ok.
     }
 
     public String remove(String key) {
-        return tablePartMap.remove(key);
+        if (diffMap.get().containsKey(key)) {
+            String oldValue = diffMap.get().get(key);
+            // Already removed.
+            if (oldValue == null) {
+                return null;
+            } else {
+                // Postponed put will be cancelled.
+                diffMap.get().remove(key);
+                return oldValue;
+            }
+        } else {
+            diffMap.get().put(key, null);
+            return lastCommittedMap.get(key);
+        }
     }
 
+    /**
+     * Makes a separate up-to-date version which is a commit of the thread diff to the clone of {@link
+     * #lastCommittedMap}.
+     * @return Separate actual version. Changes in this instance have not effect on true database state.
+     */
+    private Map<String, String> makeNewActualVersion() {
+        return makeActualVersion(new HashMap<>(lastCommittedMap));
+    }
+
+    /**
+     * Convenience method for private actual version supplying.
+     * @param actualVersion
+     *         Map to commit thread diffs to.
+     * @return actualVersion (the same instance) with committed diffs.
+     */
+    private Map<String, String> makeActualVersion(Map<String, String> actualVersion) {
+        for (Entry<String, String> e : diffMap.get().entrySet()) {
+            if (e.getValue() == null) {
+                actualVersion.remove(e.getKey());
+            } else {
+                actualVersion.put(e.getKey(), e.getValue());
+            }
+        }
+
+        return actualVersion;
+    }
+
+    /**
+     * Returns actual size for the moment (considering the thread local diff).
+     */
     public int size() {
-        return tablePartMap.size();
+        return makeNewActualVersion().size();
     }
 
-    public void writeToFile() throws IOException {
+    /**
+     * Writes changes to the file.
+     * @throws java.io.IOException
+     */
+    private void writeToFile() throws IOException {
         ByteArrayOutputStream stream = new ByteArrayOutputStream(1024);
-        Iterator<String> keyIterator = tablePartMap.keySet().iterator();
+        Iterator<String> keyIterator = lastCommittedMap.keySet().iterator();
 
         Charset charset = Charset.forName("UTF-8");
 
-        int[] shiftPositions = new int[tablePartMap.size()];
+        int[] shiftPositions = new int[lastCommittedMap.size()];
 
         byte[] intZero = new byte[] {0, 0, 0, 0};
 
@@ -239,14 +277,14 @@ public class TablePart {
             stream.write(intZero);
         }
 
-        int[] links = new int[tablePartMap.size()];
+        int[] links = new int[lastCommittedMap.size()];
 
         keyID = 0;
-        keyIterator = tablePartMap.keySet().iterator();
+        keyIterator = lastCommittedMap.keySet().iterator();
         while (keyIterator.hasNext()) {
             links[keyID] = stream.size();
             keyID++;
-            stream.write(tablePartMap.get(keyIterator.next()).getBytes(charset));
+            stream.write(lastCommittedMap.get(keyIterator.next()).getBytes(charset));
         }
 
         byte[] bytes = stream.toByteArray();
@@ -283,13 +321,17 @@ public class TablePart {
         }
     }
 
-    public int commit() throws DatabaseException {
+    public int commit() throws DatabaseIOException {
         int diffsCount = getUncommittedChangesCount();
-        lastCommittedMap = new HashMap<>(tablePartMap);
-        try {
-            writeToFile();
-        } catch (IOException exc) {
-            throw new DatabaseException("Failed to persist table", exc);
+
+        if (diffsCount > 0) {
+            makeActualVersion(lastCommittedMap);
+            diffMap.get().clear();
+            try {
+                writeToFile();
+            } catch (IOException exc) {
+                throw new DatabaseIOException("Failed to persist table", exc);
+            }
         }
 
         return diffsCount;
@@ -297,11 +339,11 @@ public class TablePart {
 
     public int rollback() {
         int diffsCount = getUncommittedChangesCount();
-        tablePartMap = new HashMap<>(lastCommittedMap);
+        diffMap.get().clear();
         return diffsCount;
     }
 
     public int getUncommittedChangesCount() {
-        return Utility.countDifferences(lastCommittedMap, tablePartMap);
+        return diffMap.get().size();
     }
 }

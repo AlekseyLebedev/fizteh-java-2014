@@ -3,6 +3,7 @@ package ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.test;
 import org.junit.runner.RunWith;
 import ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.db.TablePart;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
@@ -48,16 +49,21 @@ public class ReadWriteTest {
         }
 
         Path testPath = Paths.get(System.getProperty("user.home"), "test", "java_test.dat");
+        Files.deleteIfExists(testPath);
+
         TablePart testFileMap = new TablePart(testPath);
 
         for (Entry<String, String> e : map.entrySet()) {
             testFileMap.put(e.getKey(), e.getValue());
         }
 
-        testFileMap.writeToFile();
+        testFileMap.commit();
 
         testFileMap = new TablePart(testPath);
-        testFileMap.readFromFile();
+
+        if (Files.exists(testPath)) {
+            testFileMap.readFromFile();
+        }
 
         assertEquals("Map sizes do not match", map.size(), testFileMap.size());
 

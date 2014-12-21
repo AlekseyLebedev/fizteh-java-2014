@@ -9,7 +9,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.text.ParseException;
 import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -23,13 +26,17 @@ import java.util.Map;
  * @see ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.shell.ShellState
  */
 public class Shell<ShellStateImpl extends ShellState<ShellStateImpl>> {
-    public static final int READ_BUFFER_SIZE = 16 * 1024;
+    private static final char QUOTE_CHARACTER = '\"';
+    private static final char ESCAPE_CHARACTER = '\\';
 
+    private static final char COMMAND_END_CHARACTER = ';';
+
+    private static final int READ_BUFFER_SIZE = 16 * 1024;
     /**
      * Object encapsulating commands and data they work with.
      */
     private final ShellStateImpl shellState;
-
+    private boolean valid = true;
     /**
      * Available commands for invocation.
      */
@@ -46,14 +53,62 @@ public class Shell<ShellStateImpl extends ShellState<ShellStateImpl>> {
     }
 
     /**
+     * Splits command string into commands.
+     * @param commandsStr
+     *         Commands split by {@link #COMMAND_END_CHARACTER}.
+     * @return List of commands, each command is an array of its parts (space splitters are excluded from
+     * everywhere except quoted parts).
+     * @throws java.text.ParseException
+     *         In case of bad format.
+     */
+    public static List<String[]> splitCommandsString(String commandsStr) throws ParseException {
+        // command1 option1,  "string const1", ...; command2 ...
+
+        if (!commandsStr.endsWith(COMMAND_END_CHARACTER + "")) {
+            commandsStr += COMMAND_END_CHARACTER;
+        }
+
+        List<String[]> commands = new LinkedList<>();
+        List<String> commandParts = new LinkedList<>();
+
+        for (int start = 0, index = 0, len = commandsStr.length(); index < len; ) {
+            char symbol = commandsStr.charAt(index);
+
+            if (symbol == QUOTE_CHARACTER) {
+                index = Utility.findClosingQuotes(
+                        commandsStr, index + 1, len, QUOTE_CHARACTER, ESCAPE_CHARACTER);
+                if (index < 0) {
+                    throw new ParseException("Cannot find closing quotes", -1);
+                }
+                index++;
+            } else if (Character.isSpaceChar(symbol) || symbol == COMMAND_END_CHARACTER) {
+                String part = commandsStr.substring(start, index).trim();
+                if (!part.isEmpty()) {
+                    commandParts.add(part);
+                }
+                start = index + 1;
+                index++;
+
+                if (symbol == COMMAND_END_CHARACTER) {
+                    commands.add(commandParts.toArray(new String[commandParts.size()]));
+                    commandParts = new LinkedList<>();
+                }
+            } else {
+                index++;
+            }
+        }
+
+        return commands;
+    }
+
+    /**
      * Executes command in this shell
-     * @param commandStr
+     * @param args
      *         some shell command
      * @throws ru.fizteh.fivt.students.fedorov_andrew.databaselibrary.exception.TerminalException
      */
-    private void execute(String commandStr) throws TerminalException, ExitRequest {
-        String[] args = commandStr.trim().split("[ \t]+");
-        if (args[0].isEmpty()) {
+    private void execute(String[] args) throws TerminalException, ExitRequest {
+        if (args.length == 0) {
             return;
         }
 
@@ -68,7 +123,7 @@ public class Shell<ShellStateImpl extends ShellState<ShellStateImpl>> {
             } catch (TerminalException | ExitRequest exc) {
                 // If it is TerminalException, error report is already written.
                 throw exc;
-            } catch (Throwable exc) {
+            } catch (Exception exc) {
                 Utility.handleError(args[0] + ": Method execution error", exc, true);
             }
         }
@@ -93,11 +148,19 @@ public class Shell<ShellStateImpl extends ShellState<ShellStateImpl>> {
         return interactive;
     }
 
+    private void checkValid() throws IllegalStateException {
+        if (!valid) {
+            throw new IllegalStateException("Shell has already run");
+        }
+    }
+
     /**
-     * Execute commands from input stream. Commands are awaited until the-end-of-stream.
-     * @param stream
+     * Execute commands from input stream. Commands are awaited till the-end-of-stream.
      */
     public int run(InputStream stream) throws TerminalException {
+        checkValid();
+        valid = false;
+
         interactive = true;
 
         if (stream == null) {
@@ -117,17 +180,19 @@ public class Shell<ShellStateImpl extends ShellState<ShellStateImpl>> {
                     break;
                 }
 
-                String[] commands = str.split(";");
+                List<String[]> commands = splitCommandsString(str);
                 try {
-                    for (String command : commands) {
+                    for (String[] command : commands) {
                         execute(command);
                     }
                 } catch (TerminalException exc) {
                     // Exception is already handled.
                 }
             }
-        } catch (IOException exc) {
-            Utility.handleError("Cannot read input stream: " + exc.getMessage(), exc, true);
+        } catch (IOException | ParseException exc) {
+            exitRequested = true;
+            Utility.handleError("Error in input stream: " + exc.getMessage(), exc, true);
+            // No need to cleanup - work has not been started.
         } catch (ExitRequest request) {
             exitRequested = true;
             return request.getCode();
@@ -154,24 +219,24 @@ public class Shell<ShellStateImpl extends ShellState<ShellStateImpl>> {
      *         sequence, next commands will not be executed.
      * @return Exit code. 0 means normal status, anything else - abnormal termination (error).
      */
-    public int run(String[] args) {
+    public int run(String[] args) throws TerminalException {
+        checkValid();
+        valid = false;
+
         try {
             interactive = false;
 
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0, len = args.length; i < len; i++) {
-                sb.append((i == 0 ? "" : " ")).append(args[i]);
-            }
-            String allCommands = sb.toString();
-            String[] commands = allCommands.split(";");
-
             try {
-                for (String command : commands) {
+                List<String[]> commands = splitCommandsString(String.join(" ", args));
+
+                for (String[] command : commands) {
                     execute(command);
                 }
             } catch (TerminalException exc) {
                 // Exception already handled.
                 shellState.prepareToExit(1);
+            } catch (ParseException exc) {
+                Utility.handleError("Cannot parse command arguments: " + exc.getMessage(), exc, true);
             }
             persistSafelyAndPrepareToExit();
         } catch (ExitRequest request) {
@@ -196,6 +261,22 @@ public class Shell<ShellStateImpl extends ShellState<ShellStateImpl>> {
         } catch (Exception exc) {
             Log.log(Shell.class, exc, "Failed to persist shell state");
             shellState.prepareToExit(1);
+        }
+    }
+
+    public boolean isValid() {
+        return valid;
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+        super.finalize();
+        if (valid) {
+            try {
+                shellState.prepareToExit(0);
+            } catch (ExitRequest req) {
+                // Ignore it.
+            }
         }
     }
 }
