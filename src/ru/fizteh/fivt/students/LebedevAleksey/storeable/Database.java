@@ -94,7 +94,7 @@ public class Database implements TableProvider {
         throw new IOException(e.getMessage(), e);
     }
 
-    public static List<Class<?>> ParseTypes(String[] input) throws ParseException {
+    public static List<Class<?>> parseTypes(String[] input) throws ParseException {
         List<Class<?>> types = new ArrayList<>(input.length);
         for (String item : input) {
             Class<?> type = stringTypesMap.get(item);
@@ -217,15 +217,15 @@ public class Database implements TableProvider {
                     storable.setColumnAt(i, 0);
                 } else if (data.get(i).getClass() == table.getColumnType(i)) {
                     storable.setColumnAt(i, data.get(i));
-                } else if (!tryCastInteger(table, i, data.get(i), storable) &&
-                        !tryCastFloat(table, i, data.get(i), storable)) {
+                } else if (!tryCastInteger(table, i, data.get(i), storable)
+                        && !tryCastFloat(table, i, data.get(i), storable)) {
                     throw new ParseException("Wrong data type in column number " + i, -1);
                 }
             }
             return storable;
         } else {
-            throw new ParseException("Wrong size of list: have " + data.size() + ", table have " +
-                    table.getColumnsCount() + " columns.", value.length() - 1);
+            throw new ParseException("Wrong size of list: have " + data.size() + ", table have "
+                    + table.getColumnsCount() + " columns.", value.length() - 1);
         }
     }
 

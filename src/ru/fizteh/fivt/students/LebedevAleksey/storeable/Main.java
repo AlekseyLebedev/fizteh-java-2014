@@ -84,7 +84,7 @@ public class Main {
                                 types = new String[0];
                             }
                             if (toDatabaseState(state).getDatabase().
-                                    createTable(name, Database.ParseTypes(types)) == null) {
+                                    createTable(name, Database.parseTypes(types)) == null) {
                                 streams.getOut().println(name + " exists");
                                 return true;
                             }

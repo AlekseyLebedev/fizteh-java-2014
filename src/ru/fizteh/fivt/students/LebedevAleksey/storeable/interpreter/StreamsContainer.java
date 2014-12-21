@@ -16,7 +16,7 @@ public class StreamsContainer {
     }
 
 
-    public StreamsContainer(){
+    public StreamsContainer() {
         out = System.out;
         err = System.err;
         in = System.in;

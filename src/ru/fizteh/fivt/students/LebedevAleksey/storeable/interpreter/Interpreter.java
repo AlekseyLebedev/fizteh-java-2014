@@ -3,6 +3,9 @@ package ru.fizteh.fivt.students.LebedevAleksey.storeable.interpreter;
 import java.util.*;
 
 public class Interpreter {
+    public static final String SLASH_SPECIAL_STRING = "#s";
+    public static final String QUOTE_SPECIAL_STRING = "#q";
+    public static final String SEMICOLON_SPECIAL_STRING = "#d";
     private boolean hasCorrectTerminated = false;
 
     private InterpreterState currentState;
@@ -72,16 +75,25 @@ public class Interpreter {
     }
 
     private List<ParsedCommand> parseCommand(String input) throws ParserException {
+        input = replaceSpecialChars(input);
         List<CommandToken> tokensByQuote = splitCommandByQuote(input);
         ArrayList<ArrayList<CommandToken>> commandsTokens = splitCommands(tokensByQuote);
         return getParsedCommands(commandsTokens);
+    }
+
+    private String replaceSpecialChars(String input) {
+        input = input.replace("#", "##");
+        input = input.replace("\\\\", SLASH_SPECIAL_STRING);
+        input = input.replace("\\\"", QUOTE_SPECIAL_STRING);
+        input = input.replace("\\;", SEMICOLON_SPECIAL_STRING);
+        return input;
     }
 
     private List<ParsedCommand> parseCommand(String[] input) throws ParserException {
         ArrayList<ArrayList<CommandToken>> commandsTokens = new ArrayList<>();
         commandsTokens.add(new ArrayList<>());
         for (String arg : input) {
-            String[] tokens = arg.split(";", -1);
+            String[] tokens = replaceSpecialChars(arg).split(";", -1);
             addAtEnd(commandsTokens, tokens[0]);
             for (int i = 1; i < tokens.length; ++i) {
                 commandsTokens.add(new ArrayList<>());
@@ -145,16 +157,43 @@ public class Interpreter {
         for (ArrayList<CommandToken> currentCommand : commandsTokens) {
             ArrayList<String> arguments = splitArguments(currentCommand);
             ParsedCommand result = new ParsedCommand();
-            result.setCommandName(((arguments.size() > 0) ? arguments.get(0) : null));
+            result.setCommandName(((arguments.size() > 0) ? removeSpecialChars(arguments.get(0)) : null));
             String[] realArguments = new String[(arguments.size() > 0) ? arguments.size() - 1 : 0];
             for (int i = 1; i < arguments.size(); ++i) {
-                realArguments[i - 1] = arguments.get(i);
+                realArguments[i - 1] = removeSpecialChars(arguments.get(i));
             }
             result.setArguments(realArguments);
             commands.add(result);
         }
 
         return commands;
+    }
+
+    private String removeSpecialChars(String text) {
+        text = replaceSpecialString(text, SLASH_SPECIAL_STRING, "\\");
+        text = replaceSpecialString(text, SEMICOLON_SPECIAL_STRING, ";");
+        text = replaceSpecialString(text, QUOTE_SPECIAL_STRING, "\"");
+        return text.replace("##", "#");
+    }
+
+    private String replaceSpecialString(String text, String mask, String maskValue) {
+        int index = 0;
+        do {
+            index = text.indexOf(mask, index);
+            if (index >= 0) {
+                int j = index - 1;
+                while (j >= 0 && text.charAt(j) == '#') {
+                    j--;
+                }
+                if ((index - j) % 2 == 0) {
+                    ++index;
+                } else {
+                    text = text.substring(0, index) + maskValue + text.substring(index + mask.length());
+                }
+            }
+        }
+        while (index >= 0);
+        return text;
     }
 
     public final void run(String[] args) {
@@ -212,10 +251,12 @@ public class Interpreter {
     }
 
     protected boolean invokeCommands(List<ParsedCommand> commands) throws ParserException {
+        String lastCommand = "";
         for (ParsedCommand command : commands) {
             if (command.getCommandName() != null) {
                 try {
                     boolean foundCommand = false;
+                    lastCommand = command.getCommandName();
                     for (Command cmd : commandsList) {
                         if (cmd.getName().equals(command.getCommandName())) {
                             foundCommand = true;
@@ -233,7 +274,7 @@ public class Interpreter {
                         throw new ParserException("This command is unknown: " + command.getCommandName());
                     }
                 } catch (ArgumentException ex) {
-                    streams.getErr().println(ex.getMessage());
+                    streams.getErr().println(lastCommand + ": " + ex.getMessage());
                     return false;
                 }
             }

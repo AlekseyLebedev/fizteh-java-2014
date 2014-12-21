@@ -78,10 +78,10 @@ public class DatabaseTest {
     @Test(expected = IOException.class)
     public void testFileFoundInRootDirectory() throws IOException {
         new Database(dbPath.getAbsolutePath()) {
-            void Test() throws IOException {
+            void test() throws IOException {
                 fileFoundInRootDirectory(new File("Test"));
             }
-        }.Test();
+        }.test();
     }
 
     @Test

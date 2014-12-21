@@ -150,6 +150,36 @@ public class InterpreterTest {
 
     @Test
     public void testCorrectArgumentsParsingInteractiveMode() {
+        List<Command> commands = getPrintEndExitCommands();
+        compareInteractive(commands, "print 345 abc \"de fg\"         \"hij\"\t \tklmn;print\t;print\t;exit",
+                "$ 5 345 abc de fg hij klmn00Terminated" + System.lineSeparator());
+        compareInteractive(commands, "                  print          \t\t\t\t\t  test          \t\t\t       "
+                        + System.lineSeparator() + "exit", "$ 1 test$ Terminated" + System.lineSeparator()
+        );
+        compareInteractive(commands,
+                "\t\t\t\t\t    print\t\"qwe rty\tyu\"   1 2 3  \t\t  test   j;\tprint\t;\tprint; print ;exit",
+                "$ 6 qwe rty\tyu 1 2 3 test j000Terminated" + System.lineSeparator());
+        compareInteractive(commands, "exit\t", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, "exit ", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, "\texit", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, " exit", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, "exit\t\t", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, "exit ", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, "\t\texit", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, "  exit", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, "exit\t ", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, "exit \t", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, "\t exit", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, " \texit", "$ Terminated" + System.lineSeparator());
+        compareInteractive(commands, "print \"[1,\\\"1234\\\"]\"; exit",
+                "$ 1 [1,\"1234\"]Terminated" + System.lineSeparator());
+        compareInteractive(commands, "print \"[1,\\\"1234\\\"]\" \\;\\\\#; exit",
+                "$ 2 [1,\"1234\"] ;\\#Terminated" + System.lineSeparator());
+        compareInteractive(commands, "print \"[1,#\\\"1234\\\"]\" ##\\;\\\\#; exit",
+                "$ 2 [1,#\"1234\"] ##;\\#Terminated" + System.lineSeparator());
+    }
+
+    private List<Command> getPrintEndExitCommands() {
         List<Command> commands = new ArrayList<>();
         commands.add(new Command("print") {
             @Override
@@ -171,35 +201,23 @@ public class InterpreterTest {
                 return false;
             }
         });
-        compareInteractive(commands, "print 345 abc \"de fg\"         \"hij\"\t \tklmn;print\t;print\t;exit",
-                "$ 5 345 abc de fg hij klmn00Terminated" + System.lineSeparator());
-        compareInteractive(commands, "                  print          \t\t\t\t\t  test          \t\t\t       "
-                        + System.lineSeparator() + "exit", "$ 1 test$ Terminated" + System.lineSeparator()
-        );
-        compareInteractive(commands,
-                "\t\t\t\t\t    print\t\"qwe rty\tyu\"   1 2 3  \t\t  test   j;\tprint\t;\tprint; print ;exit",
-                "$ 6 qwe rty\tyu 1 2 3 test j000Terminated" + System.lineSeparator());
-        compareInteractive(commands, "exit\t", "$ Terminated" + System.lineSeparator());
-        compareInteractive(commands, "exit ", "$ Terminated" + System.lineSeparator());
-        compareInteractive(commands, "\texit", "$ Terminated" + System.lineSeparator());
-        compareInteractive(commands, " exit", "$ Terminated" + System.lineSeparator());
-        compareInteractive(commands, "exit\t\t", "$ Terminated" + System.lineSeparator());
-        compareInteractive(commands, "exit ", "$ Terminated" + System.lineSeparator());
-        compareInteractive(commands, "\t\texit", "$ Terminated" + System.lineSeparator());
-        compareInteractive(commands, "  exit", "$ Terminated" + System.lineSeparator());
-        compareInteractive(commands, "exit\t ", "$ Terminated" + System.lineSeparator());
-        compareInteractive(commands, "exit \t", "$ Terminated" + System.lineSeparator());
-        compareInteractive(commands, "\t exit", "$ Terminated" + System.lineSeparator());
-        compareInteractive(commands, " \texit", "$ Terminated" + System.lineSeparator());
+        return commands;
     }
 
     private void compareInteractive(List<Command> commands, String input, String expected) {
+        compareInteractive(commands, input, expected, 0, "");
+    }
+
+
+    private void compareInteractive(List<Command> commands, String input, String expected, int exitCode, String error) {
         Interpreter interpreter;
         prepareStreams();
         interpreter = new Interpreter(commands, new InterpreterState(), createStreamContainer(
                 new ByteArrayInputStream(input.getBytes())));
         interpreter.run(new String[0]);
         Assert.assertEquals(expected, testOutput.toString());
+        Assert.assertEquals(exitCode, interpreter.getExitCode());
+        Assert.assertEquals(error, testError.toString());
     }
 
     private void compareBatch(List<Command> commands, String[] input, String expected) {
@@ -208,13 +226,16 @@ public class InterpreterTest {
         interpreter = new Interpreter(commands, new InterpreterState(), createStreamContainer(null));
         interpreter.run(input);
         Assert.assertEquals(expected, testOutput.toString());
+        Assert.assertEquals(0, interpreter.getExitCode());
+        Assert.assertEquals("", testError.toString());
     }
 
     private Interpreter createInterpreterWithTestCommand(InputStream input) {
         List<Command> commands = new ArrayList<>();
         commands.add(new Command(TEST_COMMAND_NAME, 0) {
             @Override
-            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams) throws ArgumentException, ParserException {
+            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams)
+                    throws ArgumentException, ParserException {
                 streams.getOut().println("TestMessage");
                 return true;
             }
@@ -248,5 +269,52 @@ public class InterpreterTest {
     public void prepareStreams() {
         testOutput.reset();
         testError.reset();
+    }
+
+    @Test
+    public void testShortInput() {
+        Interpreter interpreter;
+        prepareStreams();
+        interpreter = new Interpreter(getPrintEndExitCommands(), new InterpreterState(), createStreamContainer(
+                new ByteArrayInputStream("print 1".getBytes())));
+        interpreter.run(new String[0]);
+        Assert.assertEquals("$ 1 1$ ", testOutput.toString());
+        Assert.assertEquals(1, interpreter.getExitCode());
+        Assert.assertEquals("Error: Can not read" + System.lineSeparator(), testError.toString());
+    }
+
+    @Test
+    public void testWrongInput() {
+        List<Command> commands = getPrintEndExitCommands();
+        compareInteractive(commands, "print \";exit", "$ $ ", 1, "Error: Wrong quote structure."
+                + System.lineSeparator() + "Error: Can not read" + System.lineSeparator());
+        compareInteractive(commands, "pr\"nt; exit", "$ $ ", 1, "Error: Wrong quote structure."
+                + System.lineSeparator() + "Error: Can not read" + System.lineSeparator());
+        compareInteractive(commands, "print \"1\"2; exit", "$ $ ", 1, "Error: Where is no space between to arguments."
+                + System.lineSeparator() + "Error: Can not read" + System.lineSeparator());
+    }
+
+
+    @Test
+    public void testExceptionInCommand() {
+        List<Command> commands = getPrintEndExitCommands();
+        commands.add(new Command("tst") {
+            @Override
+            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams)
+                    throws ArgumentException, ParserException {
+                throw new ArgumentException("Message");
+            }
+        });
+        commands.add(new Command("tst2") {
+            @Override
+            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams)
+                    throws ArgumentException, ParserException {
+                throw new ParserException("Message2");
+            }
+        });
+        compareInteractive(commands, "tst; exit", "$ $ ", 1, "tst: Message"
+                + System.lineSeparator() + "Error: Can not read" + System.lineSeparator());
+        compareInteractive(commands, "tst2; exit", "$ $ ", 1, "Error: Message2"
+                + System.lineSeparator() + "Error: Can not read" + System.lineSeparator());
     }
 }

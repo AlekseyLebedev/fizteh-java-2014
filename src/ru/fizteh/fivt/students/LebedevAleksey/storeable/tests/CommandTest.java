@@ -9,7 +9,7 @@ public class CommandTest {
     public static final int TEST_COUNT = 10;
     public static final String TEST_COMMAND_NAME = "testname";
     private InterpreterState state = new InterpreterState();
-    private StreamsContainer streams=new StreamsContainer();
+    private StreamsContainer streams = new StreamsContainer();
 
     @Test
     public void testInvoke() throws ParserException {
@@ -182,7 +182,8 @@ public class CommandTest {
     public void testCheckCommandNameSecondCtor() throws ParserException {
         Command cmd = new Command(TEST_COMMAND_NAME) {
             @Override
-            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams) throws ArgumentException, ParserException {
+            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams)
+                    throws ArgumentException, ParserException {
                 return true;
             }
         };

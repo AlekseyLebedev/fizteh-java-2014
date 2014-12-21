@@ -1,7 +1,7 @@
 package ru.fizteh.fivt.students.LebedevAleksey.storeable.json;
 
 public class BrokenJsonException extends Exception {
-    private int offsetError;
+    private final int offsetError;
 
     public BrokenJsonException(String message, int offsetError) {
         super(message);

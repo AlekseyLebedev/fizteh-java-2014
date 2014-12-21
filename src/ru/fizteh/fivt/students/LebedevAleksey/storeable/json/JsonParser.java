@@ -410,7 +410,7 @@ public abstract class JsonParser {
 }
 
 class JsonTerminatedException extends Exception {
-    private int offset;
+    private final int offset;
 
     public JsonTerminatedException(int index) {
         super();
