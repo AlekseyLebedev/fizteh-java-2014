@@ -92,4 +92,23 @@ public class Storeable implements ru.fizteh.fivt.storage.structured.Storeable {
     public String getStringAt(int columnIndex) throws ColumnFormatException, IndexOutOfBoundsException {
         return (String) assertColumnType(columnIndex, String.class);
     }
+
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder(getClass().getSimpleName());
+        builder.append("[");
+        boolean first = true;
+        for (Object item : data) {
+            if (first) {
+                first = false;
+            } else {
+                builder.append(",");
+            }
+            if (item != null) {
+                builder.append(item.toString());
+            }
+        }
+        builder.append("]");
+        return builder.toString();
+    }
 }

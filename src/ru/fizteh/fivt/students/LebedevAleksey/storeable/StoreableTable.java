@@ -11,12 +11,14 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.*;
+import java.util.concurrent.Exchanger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
-public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
+public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, AutoCloseable {
     private final String name;
     private final Database database;
     private final ThreadLocal<Map<String, String>> changedKeys = new ThreadLocal<Map<String, String>>() {
@@ -28,6 +30,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     private Table stringTable;
     private List<Class<?>> columnTypes;
     private ReadWriteLock lock = new ReentrantReadWriteLock(true);
+    private AtomicBoolean closed = new AtomicBoolean(false);
 
     public StoreableTable(String name, Database databaseParent, List<Class<?>> types) {
         Lock writeLock = lock.writeLock();
@@ -62,6 +65,12 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
         return oldValue;
     }
 
+    private void checkClosed() {
+        if (closed.get()) {
+            throw new IllegalStateException("Table is closed");
+        }
+    }
+
     private String getString(String key) throws LoadOrSaveException, DatabaseFileStructureException {
         if (changedKeys.get().containsKey(key)) {
             return changedKeys.get().get(key);
@@ -72,6 +81,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
 
     @Override
     public Storeable put(String key, Storeable value) throws ColumnFormatException {
+        checkClosed();
         checkKeyValueNotNull(key, value);
         Lock readLock = lock.readLock();
         readLock.lock();
@@ -96,6 +106,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
 
     @Override
     public Storeable remove(String key) {
+        checkClosed();
         checkKeyNotNull(key);
         String value;
         Lock readLock = lock.readLock();
@@ -121,6 +132,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
 
     @Override
     public int size() {
+        checkClosed();
         Lock readLock = lock.readLock();
         try {
             int deletedCount = 0;
@@ -146,6 +158,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
 
     @Override
     public int commit() throws IOException {
+        checkClosed();
         Lock writeLock = lock.writeLock();
         writeLock.lock();
         int changes = changesCount();
@@ -169,11 +182,13 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     }
 
     public int changesCount() {
+        checkClosed();
         return changedKeys.get().size();
     }
 
     @Override
     public int rollback() {
+        checkClosed();
         int changes = changesCount();
         changedKeys.get().clear();
         return changes;
@@ -186,6 +201,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
 
     @Override
     public String getName() {
+        checkClosed();
         Lock readLock = lock.readLock();
         readLock.lock();
         String name = this.name;
@@ -196,6 +212,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
 
     @Override
     public Storeable get(String key) {
+        checkClosed();
         checkKeyNotNull(key);
         Lock readLock = lock.readLock();
         readLock.lock();
@@ -220,6 +237,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
 
     @Override
     public int getColumnsCount() {
+        checkClosed();
         Lock readLock = lock.readLock();
         readLock.lock();
         int size = columnTypes.size();
@@ -229,6 +247,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
 
     @Override
     public Class<?> getColumnType(int columnIndex) throws IndexOutOfBoundsException {
+        checkClosed();
         Lock readLock = lock.readLock();
         readLock.lock();
         Class<?> result = columnTypes.get(columnIndex);
@@ -237,6 +256,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     }
 
     public void drop() throws DatabaseFileStructureException, LoadOrSaveException {
+        checkClosed();
         Lock writeLock = lock.writeLock();
         writeLock.lock();
         try {
@@ -253,6 +273,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
 
     @Override
     public List<String> list() {
+        checkClosed();
         Lock readLock = lock.readLock();
         readLock.lock();
         Set<String> items;
@@ -279,5 +300,37 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
             }
         });
         return result;
+    }
+
+    @Override
+    public void close() throws Exception {
+        checkClosed();
+        Throwable rollbackException = null;
+        try {
+            rollback();
+        } catch (Throwable e) {
+            rollbackException = e;
+        } finally {
+            try {
+                database.reloadTable(this);
+                if (rollbackException != null) {
+                    Exception e = (Exception)rollbackException;
+                    rollbackException = null;
+                    throw e;
+                }
+            } catch (Exception e) {
+                if (rollbackException != null) {
+                    e.addSuppressed(rollbackException);
+                }
+            } finally {
+                closed.set(true);
+            }
+        }
+    }
+
+    @Override
+    public String toString() {
+        checkClosed();
+        return getClass().getSimpleName() + "[" + database.getRootDirectoryPath().resolve(name).toString() + "]";
     }
 }

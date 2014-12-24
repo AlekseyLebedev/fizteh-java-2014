@@ -17,16 +17,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
 
-public class Database implements TableProvider {
+public class Database implements TableProvider, AutoCloseable {
     public static final String TABLE_SIGNATURE_FILE_NAME = "signature.tsv";
     private static final String INCORRECT_NAME_OF_TABLES = "This name is not correct, folder can't be created";
     private static Map<String, Class<?>> stringTypesMap = new HashMap<>();
     private static Map<Class, String> typesStringMap = new HashMap<>();
+    private AtomicBoolean closed = new AtomicBoolean(false);
 
     static {
         stringTypesMap.put("int", Integer.class);
@@ -48,7 +50,6 @@ public class Database implements TableProvider {
     private Map<String, StoreableTable> tables = new HashMap<>();
     private ReadWriteLock lock = new ReentrantReadWriteLock();
 
-
     public Database(String directory) throws IOException {
         Lock writeLock = lock.writeLock();
         writeLock.lock();
@@ -58,36 +59,7 @@ public class Database implements TableProvider {
             directoryPath = root.toPath();
             File[] tables = root.listFiles();
             for (File file : tables) {
-                if (file.isDirectory()) {
-                    File signature = file.toPath().resolve(TABLE_SIGNATURE_FILE_NAME).toFile();
-                    String tablename = file.getName();
-                    if (signature.exists() && signature.isFile()) {
-                        String signatureString;
-                        try (FileInputStream stream = new FileInputStream(signature.getAbsolutePath())) {
-                            try (DataInputStream signaturedata = new DataInputStream(stream)) {
-                                signatureString = signaturedata.readUTF();
-                            }
-                        }
-                        String[] tokens = signatureString.split(" ");
-                        List<Class<?>> types = new ArrayList<>();
-                        if (signatureString.length() != 0) {
-                            for (String item : tokens) {
-                                Class<?> type = stringTypesMap.get(item);
-                                if (type == null) {
-                                    throw new IOException("Wrong type name in signature of table " + tablename);
-                                } else {
-                                    types.add(type);
-                                }
-                            }
-                        }
-                        StoreableTable table = generateTable(tablename, types);
-                        this.tables.put(tablename, table);
-                    } else {
-                        throw new IOException("Where is not signature file in table " + tablename);
-                    }
-                } else {
-                    fileFoundInRootDirectory(file);
-                }
+                loadTable(file);
             }
         } finally {
             writeLock.unlock();
@@ -119,12 +91,67 @@ public class Database implements TableProvider {
         return types;
     }
 
+    private void checkClosed() {
+        if (closed.get()) {
+            throw new IllegalStateException("TableProvider is closed");
+        }
+    }
+
+    private void loadTable(File file) throws IOException {
+        if (file.isDirectory()) {
+            File signature = file.toPath().resolve(TABLE_SIGNATURE_FILE_NAME).toFile();
+            String tablename = file.getName();
+            if (signature.exists() && signature.isFile()) {
+                String signatureString;
+                try (FileInputStream stream = new FileInputStream(signature.getAbsolutePath())) {
+                    try (DataInputStream signaturedata = new DataInputStream(stream)) {
+                        signatureString = signaturedata.readUTF();
+                    }
+                }
+                String[] tokens = signatureString.split(" ");
+                List<Class<?>> types = new ArrayList<>();
+                if (signatureString.length() != 0) {
+                    for (String item : tokens) {
+                        Class<?> type = stringTypesMap.get(item);
+                        if (type == null) {
+                            throw new IOException("Wrong type name in signature of table " + tablename);
+                        } else {
+                            types.add(type);
+                        }
+                    }
+                }
+                StoreableTable table = generateTable(tablename, types);
+                this.tables.put(tablename, table);
+            } else {
+                throw new IOException("Where is not signature file in table " + tablename);
+            }
+        } else {
+            fileFoundInRootDirectory(file);
+        }
+    }
+
+    void reloadTable(Table table) throws IOException {
+        checkClosed();
+        Lock writeLock = lock.writeLock();
+        writeLock.lock();
+        try {
+            if (tables.get(table.getName()) == table) {
+                loadTable(getRootDirectoryPath().resolve(table.getName()).toFile());
+            } else {
+                throw new IllegalArgumentException("Table doesn't exist.");
+            }
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
     protected void fileFoundInRootDirectory(File file) throws IOException {
         throw new IOException("There is file " + file.getName() + " in root directory");
     }
 
     @Override
     public Table getTable(String name) {
+        checkClosed();
         assertArgumentNotNull(name, "name");
         Lock readLock = lock.readLock();
         readLock.lock();
@@ -135,6 +162,7 @@ public class Database implements TableProvider {
 
     @Override
     public Table createTable(String name, List<Class<?>> columnTypes) throws IOException {
+        checkClosed();
         assertArgumentNotNull(name, "name");
         assertArgumentNotNull(columnTypes, "columnTypes");
         Lock writeLock = lock.writeLock();
@@ -198,6 +226,7 @@ public class Database implements TableProvider {
     }
 
     public Path getRootDirectoryPath() {
+        checkClosed();
         return directoryPath;
     }
 
@@ -207,6 +236,7 @@ public class Database implements TableProvider {
 
     @Override
     public void removeTable(String name) throws IOException {
+        checkClosed();
         assertArgumentNotNull(name, "name");
         Lock writeLock = lock.writeLock();
         writeLock.lock();
@@ -228,6 +258,7 @@ public class Database implements TableProvider {
 
     @Override
     public Storeable deserialize(Table table, String value) throws ParseException {
+        checkClosed();
         assertArgumentNotNull(table, "table");
         assertArgumentNotNull(value, "value");
         List<Object> data;
@@ -297,6 +328,7 @@ public class Database implements TableProvider {
 
     @Override
     public String serialize(Table table, Storeable value) throws ColumnFormatException {
+        checkClosed();
         assertArgumentNotNull(table, "table");
         assertArgumentNotNull(value, "value");
         List<Object> data = new ArrayList<>();
@@ -312,6 +344,7 @@ public class Database implements TableProvider {
 
     @Override
     public Storeable createFor(Table table) {
+        checkClosed();
         assertArgumentNotNull(table, "table");
         return new ru.fizteh.fivt.students.LebedevAleksey.storeable.Storeable(Arrays.asList(
                 new Object[table.getColumnsCount()]), table);
@@ -319,6 +352,7 @@ public class Database implements TableProvider {
 
     @Override
     public Storeable createFor(Table table, List<?> values) throws ColumnFormatException, IndexOutOfBoundsException {
+        checkClosed();
         assertArgumentNotNull(table, "table");
         assertArgumentNotNull(values, "values");
         return new ru.fizteh.fivt.students.LebedevAleksey.storeable.Storeable((List<Object>) values, table);
@@ -326,6 +360,7 @@ public class Database implements TableProvider {
 
     @Override
     public List<String> getTableNames() {
+        checkClosed();
         Lock readLock = lock.readLock();
         readLock.lock();
         final List<String> result = new ArrayList<>(tables.size());
@@ -341,6 +376,7 @@ public class Database implements TableProvider {
     }
 
     public List<Pair<String, Integer>> listTables() throws IOException {
+        checkClosed();
         final List<Pair<String, Integer>> result = new ArrayList<>(tables.size());
         Lock readLock = lock.readLock();
         readLock.lock();
@@ -357,5 +393,31 @@ public class Database implements TableProvider {
             readLock.unlock();
         }
         return result;
+    }
+
+    @Override
+    public void close() throws Exception {
+        checkClosed();
+        final List<Exception> exceptions = new ArrayList<>();
+        tables.forEach((s, table) -> {
+            try {
+                table.close();
+            } catch (Exception e) {
+                exceptions.add(e);
+            }
+        });
+        closed.set(true);
+        if (exceptions.size() > 0) {
+            for (int i = 0; i + 1 < exceptions.size(); i++) {
+                exceptions.get(i + 1).addSuppressed(exceptions.get(i));
+            }
+            throw exceptions.get(0);
+        }
+    }
+
+    @Override
+    public String toString() {
+        checkClosed();
+        return getClass().getSimpleName() + "[" + getRootDirectoryPath().toString() + "]";
     }
 }

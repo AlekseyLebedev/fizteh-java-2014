@@ -151,4 +151,10 @@ public class StoreableTest {
             }
         }
     }
+
+    @Test
+    public void testToString() throws Exception {
+        storeable.setColumnAt(2, null);
+        Assert.assertEquals("Storeable[1,-3,,true,5.5,2.3,1]", storeable.toString());
+    }
 }

@@ -231,4 +231,91 @@ public class DatabaseTest {
         String s2 = real.get(1);
         Assert.assertTrue((s1.equals("t1") && s2.equals("t2")) || (s1.equals("t2") && s2.equals("t1")));
     }
+
+    @Test(expected = IllegalStateException.class)
+    public void testGetTableThrowsExceptionOnClosedDatabase() throws Exception {
+        Table table = database.createTable("name", Arrays.asList(Integer.class));
+        ((Database) database).close();
+        database.getTable("name");
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testCreateTableThrowsExceptionOnClosedDatabase() throws Exception {
+        ((Database) database).close();
+        database.createTable("name", Arrays.asList(Integer.class));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testRemoveTableThrowsExceptionOnClosedDatabase() throws Exception {
+        Table table = database.createTable("name", Arrays.asList(Integer.class));
+        ((Database) database).close();
+        database.removeTable("name");
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testDeserializeThrowsExceptionOnClosedDatabase() throws Exception {
+        Table table = database.createTable("name", Arrays.asList(Integer.class));
+        ((Database) database).close();
+        database.deserialize(table, "[1]");
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testSerializeThrowsExceptionOnClosedDatabase() throws Exception {
+        Table table = database.createTable("name", Arrays.asList(Integer.class));
+        Storeable sto = database.createFor(table);
+        ((Database) database).close();
+        database.serialize(table, sto);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testCreateForThrowsExceptionOnClosedDatabase() throws Exception {
+        Table table = database.createTable("name", Arrays.asList(Integer.class));
+        ((Database) database).close();
+        database.createFor(table);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testCreateFor1ThrowsExceptionOnClosedDatabase() throws Exception {
+        Table table = database.createTable("name", Arrays.asList(Integer.class));
+        ((Database) database).close();
+        database.createFor(table, Arrays.asList(1));
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testGetTableNamesThrowsExceptionOnClosedDatabase() throws Exception {
+        ((Database) database).close();
+        database.getTableNames();
+    }
+
+
+    @Test(expected = IllegalStateException.class)
+    public void testToStringThrowsExceptionOnClosedDatabase() throws Exception {
+        ((Database) database).close();
+        database.toString();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testListTablesThrowsExceptionOnClosedDatabase() throws Exception {
+        ((Database) database).close();
+        ((Database) database).listTables();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testCloseThrowsExceptionOnClosedDatabase() throws Exception {
+        ((Database) database).close();
+        ((Database) database).close();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testTableClosedAfterProviderClosed() throws Exception {
+        Table table = database.createTable("name", Arrays.asList(Integer.class));
+        ((Database) database).close();
+        table.list();
+    }
+
+    @Test()
+    public void testToString() throws Exception {
+        Assert.assertEquals("Database[" + dbPath.getAbsolutePath() + "]", database.toString());
+
+    }
 }

@@ -1,5 +1,6 @@
 package ru.fizteh.fivt.students.LebedevAleksey.storeable.tests;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -9,8 +10,12 @@ import ru.fizteh.fivt.storage.structured.Table;
 import ru.fizteh.fivt.storage.structured.TableProvider;
 import ru.fizteh.fivt.storage.structured.TableProviderFactory;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.DatabaseFactory;
+import ru.fizteh.fivt.students.LebedevAleksey.storeable.StoreableTable;
 
 import java.io.File;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
 
@@ -79,5 +84,51 @@ public class StoreableTableTest {
     @Test
     public void testGetName() throws Exception {
         assertEquals("table", table.getName());
+    }
+
+    @Test
+    public void testToString() {
+        Assert.assertEquals("StoreableTable[" + tempFolder.toPath().resolve("table") + "]", table.toString());
+    }
+
+    @Test
+    public void testRollabackAfterClosing() throws Exception {
+        table.put("q", provider.createFor(table));
+        table.commit();
+        table.put("r", provider.createFor(table));
+        ((StoreableTable) table).close();
+        table = provider.getTable("table");
+        Assert.assertEquals(1, table.size());
+        Assert.assertNotNull(table.get("q"));
+    }
+
+    @Test
+    public void testAllMethodsThrowsExceptionAfterClose() throws Exception {
+        StoreableTable myTable = (StoreableTable) table;
+        myTable.close();
+        Method[] declaredMethods = myTable.getClass().getDeclaredMethods();
+        for (Method item : declaredMethods) {
+            if (Modifier.isPublic(item.getModifiers())) {
+                Object[] args = new Object[item.getParameterTypes().length];
+                Storeable storeable = provider.createFor(provider.getTable("table"));
+                for (int i = 0; i < args.length; i++) {
+                    if (item.getParameterTypes()[i] == String.class) {
+                        args[i] = "qwerty";
+                    } else {
+                        if (item.getParameterTypes()[i] == Storeable.class) {
+                            args[i] = storeable;
+                        } else {
+                            args[i] = 0;
+                        }
+                    }
+                }
+                try {
+                    item.invoke(myTable, args);
+                    Assert.fail("Should be exception invoking method " + item.getName());
+                } catch (InvocationTargetException e) {
+                    Assert.assertEquals(IllegalStateException.class, e.getTargetException().getClass());
+                }
+            }
+        }
     }
 }
