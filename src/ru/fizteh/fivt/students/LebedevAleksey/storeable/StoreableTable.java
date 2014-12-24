@@ -11,14 +11,23 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 
 public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     private final String name;
     private final Database database;
-    private Map<String, String> changedKeys = new TreeMap<>();
+    private final ThreadLocal<Map<String, String>> changedKeys = new ThreadLocal<Map<String, String>>() {
+        @Override
+        protected Map<String, String> initialValue() {
+            return new TreeMap<>();
+        }
+    };
     private Table stringTable;
     private List<Class<?>> columnTypes;
+    private ReadWriteLock lock = new ReentrantReadWriteLock(true);
 
     public StoreableTable(String name, Database databaseParent, List<Class<?>> types) {
         this.name = name;
@@ -43,16 +52,16 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     private String putStrings(String key, String value) throws DatabaseFileStructureException, LoadOrSaveException {
         String oldValue = getString(key);
         if (value.equals(stringTable.get(key))) {
-            changedKeys.remove(key);
+            changedKeys.get().remove(key);
         } else {
-            changedKeys.put(key, value);
+            changedKeys.get().put(key, value);
         }
         return oldValue;
     }
 
     private String getString(String key) throws LoadOrSaveException, DatabaseFileStructureException {
-        if (changedKeys.containsKey(key)) {
-            return changedKeys.get(key);
+        if (changedKeys.get().containsKey(key)) {
+            return changedKeys.get().get(key);
         } else {
             return stringTable.get(key);
         }
@@ -61,6 +70,8 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     @Override
     public Storeable put(String key, Storeable value) throws ColumnFormatException {
         checkKeyValueNotNull(key, value);
+        Lock readLock = lock.readLock();
+        readLock.lock();
         try {
             String result = putStrings(key, database.serialize(this, value));
             if (result == null) {
@@ -72,6 +83,8 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
             throw new DatabaseException(e);
         } catch (ParseException e) {
             throw new ColumnFormatException(e);
+        } finally {
+            readLock.unlock();
         }
     }
 
@@ -79,29 +92,36 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     public Storeable remove(String key) {
         checkKeyNotNull(key);
         String value;
+        Lock readLock = lock.readLock();
+        readLock.lock();
         try {
             value = stringTable.get(key);
-        } catch (LoadOrSaveException | DatabaseFileStructureException e) {
-            throw new DatabaseException(e);
-        }
-        Storeable oldValue = get(key);
-        if (value != null) {
-            if (oldValue != null) {
-                changedKeys.put(key, null);
+            Storeable oldValue = get(key);
+            if (value != null) {
+                if (oldValue != null) {
+                    changedKeys.get().put(key, null);
+                }
+            } else {
+                changedKeys.get().remove(key);
             }
-        } else {
-            changedKeys.remove(key);
+            return oldValue;
+        } catch (LoadOrSaveException | DatabaseFileStructureException e) {
+            readLock.unlock();
+            throw new DatabaseException(e);
+        } finally {
+            readLock.unlock();
         }
-        return oldValue;
     }
 
     @Override
     public int size() {
+        Lock readLock = lock.readLock();
+        readLock.lock();
         try {
             int deletedCount = 0;
             int addedCount = 0;
-            for (String key : changedKeys.keySet()) {
-                String value = changedKeys.get(key);
+            for (String key : changedKeys.get().keySet()) {
+                String value = changedKeys.get().get(key);
                 if (value == null) {
                     ++deletedCount;
                 } else {
@@ -113,37 +133,43 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
             return stringTable.count() + addedCount - deletedCount;
         } catch (LoadOrSaveException | DatabaseFileStructureException e) {
             throw new DatabaseException(e);
+        } finally {
+            readLock.unlock();
         }
     }
 
     @Override
     public int commit() throws IOException {
+        Lock writeLock = lock.writeLock();
+        writeLock.lock();
         int changes = changesCount();
         try {
-            for (String key : changedKeys.keySet()) {
-                String value = changedKeys.get(key);
+            for (String key : changedKeys.get().keySet()) {
+                String value = changedKeys.get().get(key);
                 if (value == null) {
                     stringTable.remove(key);
                 } else {
                     stringTable.put(key, value);
                 }
             }
-            changedKeys.clear();
+            changedKeys.get().clear();
             stringTable.save();
         } catch (DatabaseFileStructureException | LoadOrSaveException e) {
             Database.throwIOException(e);
+        } finally {
+            writeLock.unlock();
         }
         return changes;
     }
 
     public int changesCount() {
-        return changedKeys.size();
+        return changedKeys.get().size();
     }
 
     @Override
     public int rollback() {
         int changes = changesCount();
-        changedKeys.clear();
+        changedKeys.get().clear();
         return changes;
     }
 
@@ -154,12 +180,19 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
 
     @Override
     public String getName() {
+        Lock readLock = lock.readLock();
+        readLock.lock();
+        String name = this.name;
+        readLock.unlock();
         return name;
+
     }
 
     @Override
     public Storeable get(String key) {
         checkKeyNotNull(key);
+        Lock readLock = lock.readLock();
+        readLock.lock();
         try {
             String result = getString(key);
             if (result == null) {
@@ -169,34 +202,52 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
             }
         } catch (ParseException | LoadOrSaveException | DatabaseFileStructureException e) {
             throw new DatabaseException(e);
+        } finally {
+            readLock.unlock();
         }
     }
 
     @Override
     public int getColumnsCount() {
-        return columnTypes.size();
+        Lock readLock = lock.readLock();
+        readLock.lock();
+        int size = columnTypes.size();
+        readLock.unlock();
+        return size;
     }
 
     @Override
     public Class<?> getColumnType(int columnIndex) throws IndexOutOfBoundsException {
-        return columnTypes.get(columnIndex);
+        Lock readLock = lock.readLock();
+        readLock.lock();
+        Class<?> result = columnTypes.get(columnIndex);
+        readLock.unlock();
+        return result;
     }
 
     public void drop() throws DatabaseFileStructureException, LoadOrSaveException {
-        Path signatureFile = database.getRootDirectoryPath().resolve(getName()).
-                resolve(Database.TABLE_SIGNATURE_FILE_NAME);
-        if (!signatureFile.toFile().delete()) {
-            throw new LoadOrSaveException("Can't delete signature file for table " + getName());
+        Lock readLock = lock.readLock();
+        readLock.lock();
+        try {
+            Path signatureFile = database.getRootDirectoryPath().resolve(getName()).
+                    resolve(Database.TABLE_SIGNATURE_FILE_NAME);
+            if (!signatureFile.toFile().delete()) {
+                throw new LoadOrSaveException("Can't delete signature file for table " + getName());
+            }
+            stringTable.drop();
+        } finally {
+            readLock.unlock();
         }
-        stringTable.drop();
     }
 
     @Override
     public List<String> list() {
+        Lock readLock = lock.readLock();
+        readLock.lock();
         try {
             Set<String> items = new TreeSet<>(stringTable.list());
-            for (String key : changedKeys.keySet()) {
-                String value = changedKeys.get(key);
+            for (String key : changedKeys.get().keySet()) {
+                String value = changedKeys.get().get(key);
                 if (value == null) {
                     items.remove(key);
                 } else {
@@ -213,6 +264,8 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
             return result;
         } catch (DatabaseFileStructureException | LoadOrSaveException e) {
             throw new DatabaseException(e);
+        } finally {
+            readLock.unlock();
         }
     }
 }
