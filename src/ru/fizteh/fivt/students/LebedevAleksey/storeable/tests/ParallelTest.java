@@ -108,7 +108,6 @@ public class ParallelTest {
     private void waitFor(int value) {
         try {
             while (numberOfAction.get() != value) {
-                //System.out.println(numberOfAction.get() + " " + value);
                 Thread.currentThread().sleep(5);
             }
         } catch (InterruptedException e) {
