@@ -116,7 +116,7 @@ public class ProxyFactoryTest {
         Assert.assertEquals(("<?xml version=\"1.0\"?>\n"
                 + "<log>\n"
                 + "    <invoke timestamp=\"12345\" class=\""
-                + "r.fizteh.fivt.students.LebedevAleksey.storeable"
+                + "ru.fizteh.fivt.students.LebedevAleksey.storeable"
                 + ".StoreableTable\" name=\"size\">\n"
                 + "        <arguments/>\n"
                 + "        <return>1</return>\n"
