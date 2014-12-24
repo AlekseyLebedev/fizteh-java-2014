@@ -353,7 +353,7 @@ public class Database implements TableProvider {
             });
         } catch (DatabaseException e) {
             throwIOException(e.getCause());
-        }finally {
+        } finally {
             readLock.unlock();
         }
         return result;
