@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.util.Arrays;
 
 interface TestInterface {
-    public void f(int[] a);
+    void f(int[] a);
 }
 
 public class ProxyFactoryTest {
@@ -128,7 +128,8 @@ public class ProxyFactoryTest {
     public void testWrapOnTestClass() throws Exception {
         ProxyFactory factory = new ProxyFactory(1);
         CharArrayWriter writer = new CharArrayWriter();
-        TestInterface object = (TestInterface) new ProxyFactory(12345).wrap(writer, new TestClass(), TestInterface.class);
+        TestInterface object = (TestInterface) new ProxyFactory(12345).wrap(writer, new TestClass(),
+                TestInterface.class);
         object.f(new int[]{1, 2});
         factory.finishLog(writer);
         Assert.assertEquals(("<?xml version=\"1.0\"?>\n"
