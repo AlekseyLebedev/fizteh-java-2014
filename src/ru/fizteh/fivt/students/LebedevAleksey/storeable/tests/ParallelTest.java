@@ -37,78 +37,95 @@ public class ParallelTest {
         table = database.createTable("table", columnTypes.get());
     }
 
-    @Test
+    Object lock = new Object();
+
+    @Test(timeout = 30000)
     public void checkParallelWork() throws IOException, InterruptedException {
-        Storeable value = database.createFor(table);
-        value.setColumnAt(0, 5);
-        table.put("a", value);
-        value.setColumnAt(0, 7);
-        table.put("b", value);
-        table.commit();
-        Thread t1 = new Thread(() -> {
-            try {
-                table.put("c", database.createFor(table));
-                Storeable a = table.get("a");
-                a.setColumnAt(0, 2);
-                table.put("a", a);
-                numberOfAction.incrementAndGet();
-                waitFor(3);
-                Assert.assertEquals(3, table.size());
-                Assert.assertEquals((Integer) 2, table.get("a").getIntAt(0));
-                Assert.assertEquals((Integer) 7, table.get("b").getIntAt(0));
-                Assert.assertEquals(null, table.get("c").getIntAt(0));
-                numberOfAction.incrementAndGet();
-                waitFor(5);
-                table.commit();
-                numberOfAction.incrementAndGet();
-                waitFor(7);
-                Assert.assertEquals(2, table.size());
-                Assert.assertEquals((Integer) 2, table.get("a").getIntAt(0));
-                Assert.assertEquals(null, table.get("c").getIntAt(0));
-                Assert.assertNotNull(database.getTable("t2"));
-                Assert.assertNull(database.createTable("t2", columnTypes.get()));
-                database.removeTable("t2");
-                numberOfAction.incrementAndGet();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
-        Thread t2 = new Thread(() -> {
-            try {
-                table.remove("b");
-                numberOfAction.incrementAndGet();
-                waitFor(3);
-                Assert.assertEquals(1, table.size());
-                Assert.assertEquals((Integer) 5, table.get("a").getIntAt(0));
-                numberOfAction.incrementAndGet();
-                waitFor(6);
-                Assert.assertEquals(2, table.size());
-                Assert.assertEquals((Integer) 2, table.get("a").getIntAt(0));
-                Assert.assertEquals(null, table.get("c").getIntAt(0));
-                table.commit();
-                database.createTable("t2", columnTypes.get());
-                numberOfAction.incrementAndGet();
-                waitFor(8);
-                Assert.assertNull(database.getTable("t2"));
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
-        t1.start();
-        t2.start();
-        waitFor(2);
-        Assert.assertEquals(2, table.size());
-        Assert.assertEquals((Integer) 5, table.get("a").getIntAt(0));
-        Assert.assertEquals((Integer) 7, table.get("b").getIntAt(0));
+        for (int i = 0; i < 15; i++) {
+            numberOfAction.set(0);
+            Storeable value = database.createFor(table);
+            value.setColumnAt(0, 5);
+            table.put("a", value);
+            value.setColumnAt(0, 7);
+            table.put("b", value);
+            table.commit();
+            Thread t1 = new Thread(() -> {
+                try {
+                    table.put("c", database.createFor(table));
+                    Storeable a = table.get("a");
+                    a.setColumnAt(0, 2);
+                    table.put("a", a);
+                    nextAction();
+                    waitFor(3);
+                    Assert.assertEquals(3, table.size());
+                    Assert.assertEquals((Integer) 2, table.get("a").getIntAt(0));
+                    Assert.assertEquals((Integer) 7, table.get("b").getIntAt(0));
+                    Assert.assertEquals(null, table.get("c").getIntAt(0));
+                    nextAction();
+                    waitFor(5);
+                    table.commit();
+                    nextAction();
+                    waitFor(7);
+                    Assert.assertEquals(2, table.size());
+                    Assert.assertEquals((Integer) 2, table.get("a").getIntAt(0));
+                    Assert.assertEquals(null, table.get("c").getIntAt(0));
+                    Assert.assertNotNull(database.getTable("t2"));
+                    Assert.assertNull(database.createTable("t2", columnTypes.get()));
+                    database.removeTable("t2");
+                    nextAction();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            Thread t2 = new Thread(() -> {
+                try {
+                    table.remove("b");
+                    nextAction();
+                    waitFor(3);
+                    Assert.assertEquals(1, table.size());
+                    Assert.assertEquals((Integer) 5, table.get("a").getIntAt(0));
+                    nextAction();
+                    waitFor(6);
+                    Assert.assertEquals(2, table.size());
+                    Assert.assertEquals((Integer) 2, table.get("a").getIntAt(0));
+                    Assert.assertEquals(null, table.get("c").getIntAt(0));
+                    table.commit();
+                    database.createTable("t2", columnTypes.get());
+                    nextAction();
+                    waitFor(8);
+                    Assert.assertNull(database.getTable("t2"));
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            t1.start();
+            t2.start();
+            waitFor(2);
+            Assert.assertEquals(2, table.size());
+            Assert.assertEquals((Integer) 5, table.get("a").getIntAt(0));
+            Assert.assertEquals((Integer) 7, table.get("b").getIntAt(0));
+            nextAction();
+            t1.join();
+            t2.join();
+            table.remove("c");
+            table.remove("b");
+            table.commit();
+        }
+    }
+
+    private void nextAction() {
         numberOfAction.incrementAndGet();
-        t1.join();
-        t2.join();
+        synchronized (lock) {
+            lock.notifyAll();
+        }
     }
 
     private void waitFor(int value) {
         try {
-            while (numberOfAction.get() != value) {
-                Thread.currentThread().sleep(5);
+            synchronized (lock) {
+                while (numberOfAction.get() < value) {
+                    lock.wait();
+                }
             }
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
