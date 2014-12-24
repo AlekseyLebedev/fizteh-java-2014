@@ -105,12 +105,17 @@ public class ProxyFactoryTest {
         Table table = (Table) new ProxyFactory(12345).wrap(writer, newTable, Table.class);
         Assert.assertNotNull(table);
         Assert.assertEquals(1, table.size());
+        table.equals(table);
+        table.hashCode();
+        table.toString();
+        factory.finishLog(writer);
         Assert.assertEquals(("<?xml version=\"1.0\"?>\n" +
                 "<log>\n" +
                 "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable" +
                 ".StoreableTable\" name=\"size\">\n" +
                 "        <arguments/>\n" +
                 "        <return>1</return>\n" +
-                "    </invoke>").replace("\n", System.lineSeparator()), new String(writer.toCharArray()));
+                "    </invoke>\n" +
+                "</log>").replace("\n", System.lineSeparator()), new String(writer.toCharArray()));
     }
 }

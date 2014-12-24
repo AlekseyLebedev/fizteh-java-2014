@@ -6,6 +6,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.Arrays;
 import java.util.IdentityHashMap;
 
 public class ProxyFactory implements ru.fizteh.fivt.proxy.LoggingProxyFactory {
@@ -20,6 +21,10 @@ public class ProxyFactory implements ru.fizteh.fivt.proxy.LoggingProxyFactory {
         testMode = true;
     }
 
+    public void finishLog(Writer writer) throws IOException {
+        writer.append(System.lineSeparator() + "</log>");
+    }
+
     @Override
     public Object wrap(Writer writer, Object implementation, Class<?> interfaceClass) {
         final XmlWriter xml = new XmlWriter(writer);
@@ -31,6 +36,20 @@ public class ProxyFactory implements ru.fizteh.fivt.proxy.LoggingProxyFactory {
         InvocationHandler invocationHandler = new InvocationHandler() {
             @Override
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                if (Arrays.asList(Object.class.getMethods()).contains(method)) {
+                    if (method.getName().equals("toString")) {
+                        return "Wrapper on " + implementation.toString();
+                    }
+                    if (method.getName().equals("equals")) {
+                        return proxy == args[0];
+                    }
+                    if (method.getName().equals("hashCode")) {
+                        return xml.hashCode();
+                    }
+                    if (method.getName().equals("clone")) {
+                        return wrap(writer, implementation, interfaceClass);
+                    }
+                }
                 try {
                     xml.writeBeginningTag("invoke");
                     xml.writeArgument("timestamp",
@@ -114,11 +133,6 @@ public class ProxyFactory implements ru.fizteh.fivt.proxy.LoggingProxyFactory {
                     return;
                 }
                 xml.writePlainText(item.toString());
-            }
-
-            @Override
-            protected void finalize() throws Throwable {
-                xml.writeEndDocument();
             }
         };
         return Proxy.newProxyInstance(interfaceClass.getClassLoader(),
