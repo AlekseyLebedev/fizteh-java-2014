@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.util.*;
-import java.util.concurrent.Exchanger;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -314,7 +313,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, 
             try {
                 database.reloadTable(this);
                 if (rollbackException != null) {
-                    Exception e = (Exception)rollbackException;
+                    Exception e = (Exception) rollbackException;
                     rollbackException = null;
                     throw e;
                 }
