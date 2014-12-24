@@ -30,10 +30,13 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     private ReadWriteLock lock = new ReentrantReadWriteLock(true);
 
     public StoreableTable(String name, Database databaseParent, List<Class<?>> types) {
+        Lock writeLock = lock.writeLock();
+        writeLock.lock();
         this.name = name;
         database = databaseParent;
         columnTypes = types;
         stringTable = new Table(name, databaseParent.getRootDirectoryPath());
+        writeLock.unlock();
     }
 
     private void checkKeyNotNull(String key) {
@@ -72,19 +75,22 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
         checkKeyValueNotNull(key, value);
         Lock readLock = lock.readLock();
         readLock.lock();
+        String result;
         try {
-            String result = putStrings(key, database.serialize(this, value));
-            if (result == null) {
-                return null;
-            } else {
-                return database.deserialize(this, result);
-            }
+            result = putStrings(key, database.serialize(this, value));
         } catch (DatabaseFileStructureException | LoadOrSaveException e) {
             throw new DatabaseException(e);
-        } catch (ParseException e) {
-            throw new ColumnFormatException(e);
         } finally {
             readLock.unlock();
+        }
+        if (result == null) {
+            return null;
+        } else {
+            try {
+                return database.deserialize(this, result);
+            } catch (ParseException e) {
+                throw new ColumnFormatException(e);
+            }
         }
     }
 
@@ -116,7 +122,6 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     @Override
     public int size() {
         Lock readLock = lock.readLock();
-        readLock.lock();
         try {
             int deletedCount = 0;
             int addedCount = 0;
@@ -130,6 +135,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
                     }
                 }
             }
+            readLock.lock();
             return stringTable.count() + addedCount - deletedCount;
         } catch (LoadOrSaveException | DatabaseFileStructureException e) {
             throw new DatabaseException(e);
@@ -193,17 +199,22 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
         checkKeyNotNull(key);
         Lock readLock = lock.readLock();
         readLock.lock();
+        String result;
         try {
-            String result = getString(key);
+            result = getString(key);
+        } catch (LoadOrSaveException | DatabaseFileStructureException e) {
+            throw new DatabaseException(e);
+        } finally {
+            readLock.unlock();
+        }
+        try {
             if (result == null) {
                 return null;
             } else {
                 return database.deserialize(this, result);
             }
-        } catch (ParseException | LoadOrSaveException | DatabaseFileStructureException e) {
+        } catch (ParseException e) {
             throw new DatabaseException(e);
-        } finally {
-            readLock.unlock();
         }
     }
 
@@ -226,8 +237,8 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     }
 
     public void drop() throws DatabaseFileStructureException, LoadOrSaveException {
-        Lock readLock = lock.readLock();
-        readLock.lock();
+        Lock writeLock = lock.writeLock();
+        writeLock.lock();
         try {
             Path signatureFile = database.getRootDirectoryPath().resolve(getName()).
                     resolve(Database.TABLE_SIGNATURE_FILE_NAME);
@@ -236,7 +247,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
             }
             stringTable.drop();
         } finally {
-            readLock.unlock();
+            writeLock.unlock();
         }
     }
 
@@ -244,28 +255,29 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table {
     public List<String> list() {
         Lock readLock = lock.readLock();
         readLock.lock();
+        Set<String> items;
         try {
-            Set<String> items = new TreeSet<>(stringTable.list());
-            for (String key : changedKeys.get().keySet()) {
-                String value = changedKeys.get().get(key);
-                if (value == null) {
-                    items.remove(key);
-                } else {
-                    items.add(key);
-                }
-            }
-            final ArrayList<String> result = new ArrayList<>(items.size());
-            items.forEach(new Consumer<String>() {
-                @Override
-                public void accept(String s) {
-                    result.add(s);
-                }
-            });
-            return result;
+            items = new TreeSet<>(stringTable.list());
         } catch (DatabaseFileStructureException | LoadOrSaveException e) {
             throw new DatabaseException(e);
         } finally {
             readLock.unlock();
         }
+        for (String key : changedKeys.get().keySet()) {
+            String value = changedKeys.get().get(key);
+            if (value == null) {
+                items.remove(key);
+            } else {
+                items.add(key);
+            }
+        }
+        final ArrayList<String> result = new ArrayList<>(items.size());
+        items.forEach(new Consumer<String>() {
+            @Override
+            public void accept(String s) {
+                result.add(s);
+            }
+        });
+        return result;
     }
 }
