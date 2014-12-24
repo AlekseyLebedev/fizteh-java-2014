@@ -15,6 +15,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 
+interface TestInterface {
+    public void f(int[] a);
+}
+
 public class ProxyFactoryTest {
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
@@ -36,62 +40,62 @@ public class ProxyFactoryTest {
         Assert.assertNotNull(table);
         Assert.assertEquals(table, provider.getTable("name"));
         String path = dbPath.toPath().resolve("name").toString();
-        Assert.assertEquals(("<?xml version=\"1.0\"?>\n" +
-                "<log>\n" +
-                "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable." +
-                "Database\" name=\"createTable\">\n" +
-                "        <arguments>\n" +
-                "            <argument>name</argument>\n" +
-                "            <argument>\n" +
-                "                <list>\n" +
-                "                    <value>class java.lang.Integer</value>\n" +
-                "                    <value>class java.lang.String</value>\n" +
-                "                </list>\n" +
-                "            </argument>\n" +
-                "        </arguments>\n" +
-                "        <return>StoreableTable[" + path + "]</return>\n" +
-                "    </invoke>\n" +
-                "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable.Database\" " +
-                "name=\"getTable\">\n" +
-                "        <arguments>\n" +
-                "            <argument>name</argument>\n" +
-                "        </arguments>\n" +
-                "        <return>StoreableTable[" + path + "]</return>\n" +
-                "    </invoke>").replace("\n", System.lineSeparator()), new String(writer.toCharArray()));
+        Assert.assertEquals(("<?xml version=\"1.0\"?>\n"
+                + "<log>\n"
+                + "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable."
+                + "Database\" name=\"createTable\">\n"
+                + "        <arguments>\n"
+                + "            <argument>name</argument>\n"
+                + "            <argument>\n"
+                + "                <list>\n"
+                + "                    <value>class java.lang.Integer</value>\n"
+                + "                    <value>class java.lang.String</value>\n"
+                + "                </list>\n"
+                + "            </argument>\n"
+                + "        </arguments>\n"
+                + "        <return>StoreableTable[" + path + "]</return>\n"
+                + "    </invoke>\n"
+                + "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable.Database\" "
+                + "name=\"getTable\">\n"
+                + "        <arguments>\n"
+                + "            <argument>name</argument>\n"
+                + "        </arguments>\n"
+                + "        <return>StoreableTable[" + path + "]</return>\n"
+                + "    </invoke>").replace("\n", System.lineSeparator()), new String(writer.toCharArray()));
         try {
             provider.getTable(null);
         } catch (IllegalArgumentException e) {
             // Ok
         }
-        Assert.assertEquals(("<?xml version=\"1.0\"?>\n" +
-                "<log>\n" +
-                "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable." +
-                "Database\" name=\"createTable\">\n" +
-                "        <arguments>\n" +
-                "            <argument>name</argument>\n" +
-                "            <argument>\n" +
-                "                <list>\n" +
-                "                    <value>class java.lang.Integer</value>\n" +
-                "                    <value>class java.lang.String</value>\n" +
-                "                </list>\n" +
-                "            </argument>\n" +
-                "        </arguments>\n" +
-                "        <return>StoreableTable[" + path + "]</return>\n" +
-                "    </invoke>\n" +
-                "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable.Database\" " +
-                "name=\"getTable\">\n" +
-                "        <arguments>\n" +
-                "            <argument>name</argument>\n" +
-                "        </arguments>\n" +
-                "        <return>StoreableTable[" + path + "]</return>\n" +
-                "    </invoke>\n" +
-                "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable.Database" +
-                "\" name=\"getTable\">\n" +
-                "        <arguments>\n" +
-                "            <argument><null/></argument>\n" +
-                "        </arguments>\n" +
-                "        <thrown>java.lang.IllegalArgumentException: Argument &quot;name&quot; is null</thrown>\n" +
-                "    </invoke>").replace("\n", System.lineSeparator()), new String(writer.toCharArray()));
+        Assert.assertEquals(("<?xml version=\"1.0\"?>\n"
+                + "<log>\n"
+                + "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable."
+                + "Database\" name=\"createTable\">\n"
+                + "        <arguments>\n"
+                + "            <argument>name</argument>\n"
+                + "            <argument>\n"
+                + "                <list>\n"
+                + "                    <value>class java.lang.Integer</value>\n"
+                + "                    <value>class java.lang.String</value>\n"
+                + "                </list>\n"
+                + "            </argument>\n"
+                + "        </arguments>\n"
+                + "        <return>StoreableTable[" + path + "]</return>\n"
+                + "    </invoke>\n"
+                + "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable.Database\" "
+                + "name=\"getTable\">\n"
+                + "        <arguments>\n"
+                + "            <argument>name</argument>\n"
+                + "        </arguments>\n"
+                + "        <return>StoreableTable[" + path + "]</return>\n"
+                + "    </invoke>\n"
+                + "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable.Database"
+                + "\" name=\"getTable\">\n"
+                + "        <arguments>\n"
+                + "            <argument><null/></argument>\n"
+                + "        </arguments>\n"
+                + "        <thrown>java.lang.IllegalArgumentException: Argument &quot;name&quot; is null</thrown>\n"
+                + "    </invoke>").replace("\n", System.lineSeparator()), new String(writer.toCharArray()));
     }
 
     @Test
@@ -109,13 +113,45 @@ public class ProxyFactoryTest {
         table.hashCode();
         table.toString();
         factory.finishLog(writer);
-        Assert.assertEquals(("<?xml version=\"1.0\"?>\n" +
-                "<log>\n" +
-                "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.storeable" +
-                ".StoreableTable\" name=\"size\">\n" +
-                "        <arguments/>\n" +
-                "        <return>1</return>\n" +
-                "    </invoke>\n" +
-                "</log>").replace("\n", System.lineSeparator()), new String(writer.toCharArray()));
+        Assert.assertEquals(("<?xml version=\"1.0\"?>\n"
+                + "<log>\n"
+                + "    <invoke timestamp=\"12345\" class=\""
+                + "r.fizteh.fivt.students.LebedevAleksey.storeable"
+                + ".StoreableTable\" name=\"size\">\n"
+                + "        <arguments/>\n"
+                + "        <return>1</return>\n"
+                + "    </invoke>\n"
+                + "</log>").replace("\n", System.lineSeparator()), new String(writer.toCharArray()));
+    }
+
+    @Test
+    public void testWrapOnTestClass() throws Exception {
+        ProxyFactory factory = new ProxyFactory(1);
+        CharArrayWriter writer = new CharArrayWriter();
+        TestInterface object = (TestInterface) new ProxyFactory(12345).wrap(writer, new TestClass(), TestInterface.class);
+        object.f(new int[]{1, 2});
+        factory.finishLog(writer);
+        Assert.assertEquals(("<?xml version=\"1.0\"?>\n"
+                + "<log>\n"
+                + "    <invoke timestamp=\"12345\" class=\"ru.fizteh.fivt.students.LebedevAleksey.proxy.tests."
+                + "TestClass\" name=\"f\">\n"
+                + "        <arguments>\n"
+                + "            <argument>\n"
+                + "                <array>\n"
+                + "                    <value>1</value>\n"
+                + "                    <value>2</value>\n"
+                + "                </array>\n"
+                + "            </argument>\n"
+                + "        </arguments>\n"
+                + "    </invoke>\n"
+                + "</log>").replace("\n", System.lineSeparator()), new String(writer.toCharArray()));
+    }
+}
+
+class TestClass implements TestInterface {
+
+    @Override
+    public void f(int[] a) {
+
     }
 }

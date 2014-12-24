@@ -2,14 +2,12 @@ package ru.fizteh.fivt.students.LebedevAleksey.proxy;
 
 import java.io.IOException;
 import java.io.Writer;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
+import java.lang.reflect.*;
 import java.util.Arrays;
 import java.util.IdentityHashMap;
 
 public class ProxyFactory implements ru.fizteh.fivt.proxy.LoggingProxyFactory {
+    public static final String ITERABLE_VALUE_TAG = "value";
     private long timestamp;
     private boolean testMode = false;
 
@@ -124,9 +122,22 @@ public class ProxyFactory implements ru.fizteh.fivt.proxy.LoggingProxyFactory {
                     xml.writeBeginningTag("list");
                     xml.writeEndingOfTag();
                     for (Object value : (Iterable) item) {
-                        xml.writeBeginningTag("value");
+                        xml.writeBeginningTag(ITERABLE_VALUE_TAG);
                         xml.writeEndingOfTag();
                         printValue(value, map);
+                        xml.writeEndTag();
+                    }
+                    xml.writeEndTag();
+                    return;
+                }
+                if (item.getClass().isArray()) {
+                    xml.writeBeginningTag("array");
+                    xml.writeEndingOfTag();
+                    int length = Array.getLength(item);
+                    for (int i = 0; i < length; ++i) {
+                        xml.writeBeginningTag(ITERABLE_VALUE_TAG);
+                        xml.writeEndingOfTag();
+                        printValue(Array.get(item, i), map);
                         xml.writeEndTag();
                     }
                     xml.writeEndTag();
