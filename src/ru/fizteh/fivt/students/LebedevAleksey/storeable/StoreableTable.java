@@ -32,13 +32,12 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, 
     private AtomicBoolean closed = new AtomicBoolean(false);
 
     public StoreableTable(String name, Database databaseParent, List<Class<?>> types) {
-        Lock writeLock = lock.writeLock();
-        writeLock.lock();
+        lock.writeLock().lock();
         this.name = name;
         database = databaseParent;
         columnTypes = types;
         stringTable = new Table(name, databaseParent.getRootDirectoryPath());
-        writeLock.unlock();
+        lock.writeLock().unlock();
     }
 
     private void checkKeyNotNull(String key) {
@@ -82,15 +81,14 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, 
     public Storeable put(String key, Storeable value) throws ColumnFormatException {
         checkClosed();
         checkKeyValueNotNull(key, value);
-        Lock readLock = lock.readLock();
-        readLock.lock();
+        lock.readLock().lock();
         String result;
         try {
             result = putStrings(key, database.serialize(this, value));
         } catch (DatabaseFileStructureException | LoadOrSaveException e) {
             throw new DatabaseException(e);
         } finally {
-            readLock.unlock();
+            lock.readLock().unlock();
         }
         if (result == null) {
             return null;
@@ -108,8 +106,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, 
         checkClosed();
         checkKeyNotNull(key);
         String value;
-        Lock readLock = lock.readLock();
-        readLock.lock();
+        lock.readLock().lock();
         try {
             value = stringTable.get(key);
             Storeable oldValue = get(key);
@@ -122,17 +119,15 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, 
             }
             return oldValue;
         } catch (LoadOrSaveException | DatabaseFileStructureException e) {
-            readLock.unlock();
             throw new DatabaseException(e);
         } finally {
-            readLock.unlock();
+            lock.readLock().unlock();
         }
     }
 
     @Override
     public int size() {
         checkClosed();
-        Lock readLock = lock.readLock();
         try {
             int deletedCount = 0;
             int addedCount = 0;
@@ -146,20 +141,19 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, 
                     }
                 }
             }
-            readLock.lock();
+            lock.readLock().lock();
             return stringTable.count() + addedCount - deletedCount;
         } catch (LoadOrSaveException | DatabaseFileStructureException e) {
             throw new DatabaseException(e);
         } finally {
-            readLock.unlock();
+            lock.readLock().unlock();
         }
     }
 
     @Override
     public int commit() throws IOException {
         checkClosed();
-        Lock writeLock = lock.writeLock();
-        writeLock.lock();
+        lock.writeLock().lock();
         int changes = changesCount();
         try {
             for (String key : changedKeys.get().keySet()) {
@@ -175,7 +169,7 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, 
         } catch (DatabaseFileStructureException | LoadOrSaveException e) {
             Database.throwIOException(e);
         } finally {
-            writeLock.unlock();
+            lock.writeLock().unlock();
         }
         return changes;
     }
@@ -201,10 +195,9 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, 
     @Override
     public String getName() {
         checkClosed();
-        Lock readLock = lock.readLock();
-        readLock.lock();
+        lock.readLock().lock();
         String name = this.name;
-        readLock.unlock();
+        lock.readLock().unlock();
         return name;
 
     }
@@ -213,15 +206,14 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, 
     public Storeable get(String key) {
         checkClosed();
         checkKeyNotNull(key);
-        Lock readLock = lock.readLock();
-        readLock.lock();
+        lock.readLock().lock();
         String result;
         try {
             result = getString(key);
         } catch (LoadOrSaveException | DatabaseFileStructureException e) {
             throw new DatabaseException(e);
         } finally {
-            readLock.unlock();
+            lock.readLock().unlock();
         }
         try {
             if (result == null) {
@@ -237,27 +229,24 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, 
     @Override
     public int getColumnsCount() {
         checkClosed();
-        Lock readLock = lock.readLock();
-        readLock.lock();
+        lock.readLock().lock();
         int size = columnTypes.size();
-        readLock.unlock();
+        lock.readLock().unlock();
         return size;
     }
 
     @Override
     public Class<?> getColumnType(int columnIndex) throws IndexOutOfBoundsException {
         checkClosed();
-        Lock readLock = lock.readLock();
-        readLock.lock();
+        lock.readLock().lock();
         Class<?> result = columnTypes.get(columnIndex);
-        readLock.unlock();
+        lock.readLock().unlock();
         return result;
     }
 
     public void drop() throws DatabaseFileStructureException, LoadOrSaveException {
         checkClosed();
-        Lock writeLock = lock.writeLock();
-        writeLock.lock();
+        lock.writeLock().lock();
         try {
             Path signatureFile = database.getRootDirectoryPath().resolve(getName()).
                     resolve(Database.TABLE_SIGNATURE_FILE_NAME);
@@ -266,22 +255,21 @@ public class StoreableTable implements ru.fizteh.fivt.storage.structured.Table, 
             }
             stringTable.drop();
         } finally {
-            writeLock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
     @Override
     public List<String> list() {
         checkClosed();
-        Lock readLock = lock.readLock();
-        readLock.lock();
+        lock.readLock().lock();
         Set<String> items;
         try {
             items = new TreeSet<>(stringTable.list());
         } catch (DatabaseFileStructureException | LoadOrSaveException e) {
             throw new DatabaseException(e);
         } finally {
-            readLock.unlock();
+            lock.readLock().unlock();
         }
         for (String key : changedKeys.get().keySet()) {
             String value = changedKeys.get().get(key);

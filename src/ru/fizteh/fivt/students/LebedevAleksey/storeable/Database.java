@@ -51,8 +51,7 @@ public class Database implements TableProvider, AutoCloseable {
     private ReadWriteLock lock = new ReentrantReadWriteLock();
 
     public Database(String directory) throws IOException {
-        Lock writeLock = lock.writeLock();
-        writeLock.lock();
+        lock.writeLock().lock();
         try {
             assertArgumentNotNull(directory, "directory");
             File root = new File(directory);
@@ -62,7 +61,7 @@ public class Database implements TableProvider, AutoCloseable {
                 loadTable(file);
             }
         } finally {
-            writeLock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
@@ -132,8 +131,7 @@ public class Database implements TableProvider, AutoCloseable {
 
     void reloadTable(Table table) throws IOException {
         checkClosed();
-        Lock writeLock = lock.writeLock();
-        writeLock.lock();
+        lock.writeLock().lock();
         try {
             if (tables.get(table.getName()) == table) {
                 loadTable(getRootDirectoryPath().resolve(table.getName()).toFile());
@@ -141,7 +139,7 @@ public class Database implements TableProvider, AutoCloseable {
                 throw new IllegalArgumentException("Table doesn't exist.");
             }
         } finally {
-            writeLock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
@@ -153,10 +151,9 @@ public class Database implements TableProvider, AutoCloseable {
     public Table getTable(String name) {
         checkClosed();
         assertArgumentNotNull(name, "name");
-        Lock readLock = lock.readLock();
-        readLock.lock();
+        lock.readLock().lock();
         StoreableTable table = tables.get(name);
-        readLock.unlock();
+        lock.readLock().unlock();
         return table;
     }
 
@@ -165,8 +162,7 @@ public class Database implements TableProvider, AutoCloseable {
         checkClosed();
         assertArgumentNotNull(name, "name");
         assertArgumentNotNull(columnTypes, "columnTypes");
-        Lock writeLock = lock.writeLock();
-        writeLock.lock();
+        lock.writeLock().lock();
         try {
             Table checkExists = getTable(name);
             if (checkExists == null) {
@@ -204,7 +200,7 @@ public class Database implements TableProvider, AutoCloseable {
                 return null;
             }
         } finally {
-            writeLock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
@@ -238,8 +234,7 @@ public class Database implements TableProvider, AutoCloseable {
     public void removeTable(String name) throws IOException {
         checkClosed();
         assertArgumentNotNull(name, "name");
-        Lock writeLock = lock.writeLock();
-        writeLock.lock();
+        lock.writeLock().lock();
         try {
             StoreableTable table = (StoreableTable) getTable(name);
             if (table == null) {
@@ -252,7 +247,7 @@ public class Database implements TableProvider, AutoCloseable {
             }
             tables.remove(name);
         } finally {
-            writeLock.unlock();
+            lock.writeLock().unlock();
         }
     }
 
@@ -361,11 +356,10 @@ public class Database implements TableProvider, AutoCloseable {
     @Override
     public List<String> getTableNames() {
         checkClosed();
-        Lock readLock = lock.readLock();
-        readLock.lock();
+        lock.readLock().lock();
         final List<String> result = new ArrayList<>(tables.size());
         tables.keySet().forEach((String s) -> result.add(s));
-        readLock.unlock();
+        lock.readLock().unlock();
         return result;
     }
 
@@ -378,8 +372,7 @@ public class Database implements TableProvider, AutoCloseable {
     public List<Pair<String, Integer>> listTables() throws IOException {
         checkClosed();
         final List<Pair<String, Integer>> result = new ArrayList<>(tables.size());
-        Lock readLock = lock.readLock();
-        readLock.lock();
+        lock.readLock().lock();
         try {
             tables.forEach(new BiConsumer<String, StoreableTable>() {
                 @Override
@@ -390,7 +383,7 @@ public class Database implements TableProvider, AutoCloseable {
         } catch (DatabaseException e) {
             throwIOException(e.getCause());
         } finally {
-            readLock.unlock();
+            lock.readLock().unlock();
         }
         return result;
     }
