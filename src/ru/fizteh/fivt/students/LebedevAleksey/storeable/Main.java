@@ -4,7 +4,6 @@ import ru.fizteh.fivt.storage.structured.Storeable;
 import ru.fizteh.fivt.storage.structured.Table;
 import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.DatabaseFileStructureException;
 import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.Pair;
-import ru.fizteh.fivt.students.LebedevAleksey.MultiFileHashMap.TableNotFoundException;
 import ru.fizteh.fivt.students.LebedevAleksey.junit.DatabaseException;
 import ru.fizteh.fivt.students.LebedevAleksey.storeable.interpreter.*;
 
@@ -156,151 +155,75 @@ public class Main {
         return array;
     }
 
-    public static Table getCurrentTable(InterpreterState state) throws TableNotFoundException {
-        Table table = toDatabaseState(state).getCurrentTable();
-        if (table == null) {
-            System.out.println("no table");
-            throw new TableNotFoundException("No table selected");
-        } else {
-            return table;
-        }
-    }
-
     public static DatabaseState toDatabaseState(InterpreterState state) {
         return (DatabaseState) state;
     }
 
     private static List<Command> getTableCommands() {
-        return Arrays.asList(new Command("list", 0) {
+        return Arrays.asList(new TableCommand("list", 0) {
             @Override
-            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams)
-                    throws ArgumentException, ParserException {
-                try {
-                    List<String> result;
-                    result = ((StoreableTable) getCurrentTable(state)).list();
-                    for (int i = 0; i < result.size(); i++) {
-                        if (i > 0) {
-                            streams.getOut().print(", ");
-                        }
-                        streams.getOut().print(result.get(i));
+            protected void mainAction(Table table, String[] arguments, StreamsContainer streams, Database database)
+                    throws IOException {
+                List<String> result = table.list();
+                for (int i = 0; i < result.size(); i++) {
+                    if (i > 0) {
+                        streams.getOut().print(", ");
                     }
-                    streams.getOut().println();
-                    return true;
-                } catch (DatabaseException e) {
-                    streams.getErr().println(e.getMessage());
-                    return false;
-                } catch (TableNotFoundException e) {
-                    return true;
+                    streams.getOut().print(result.get(i));
+                }
+                streams.getOut().println();
+            }
+        }, new TableCommand("put", 2) {
+            @Override
+            protected void mainAction(Table table, String[] arguments, StreamsContainer streams, Database database)
+                    throws IOException, ParseException {
+                Storeable result = table.put(arguments[0], database.deserialize(table, arguments[1]));
+                if (result == null) {
+                    streams.getOut().println("new");
+                } else {
+                    streams.getOut().println("overwrite");
+                    streams.getOut().println(database.serialize(table, result));
                 }
             }
-        }, new Command("put", 2) {
+        }, new TableCommand("get", 1) {
             @Override
-            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams)
-                    throws ArgumentException, ParserException {
-                try {
-                    Database database = toDatabaseState(state).getDatabase();
-                    Table table = getCurrentTable(state);
-                    Storeable result = table.put(arguments[0], database.deserialize(table, arguments[1]));
-                    if (result == null) {
-                        streams.getOut().println("new");
-                    } else {
-                        streams.getOut().println("overwrite");
-                        streams.getOut().println(database.serialize(table, result));
-                    }
-                    return true;
-                } catch (TableNotFoundException e) {
-                    return true;
-                } catch (DatabaseException e) {
-                    streams.getErr().println(e.getMessage());
-                    return false;
-                } catch (ParseException e) {
-                    streams.getErr().println("wrong type (" + e.getMessage() + ")");
-                    return false;
-                }
-
-            }
-        }, new Command("get", 1) {
-            @Override
-            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams)
-                    throws ArgumentException, ParserException {
-                try {
-                    Database database = toDatabaseState(state).getDatabase();
-                    Table table = getCurrentTable(state);
-                    Storeable result = table.get(arguments[0]);
-                    if (result == null) {
-                        streams.getOut().println("not found");
-                    } else {
-                        streams.getOut().println("found");
-                        streams.getOut().println(database.serialize(table, result));
-                    }
-                    return true;
-                } catch (DatabaseException e) {
-                    System.err.println(e.getMessage());
-                    return false;
-                } catch (TableNotFoundException e) {
-                    return true;
+            protected void mainAction(Table table, String[] arguments, StreamsContainer streams, Database database)
+                    throws IOException {
+                Storeable result = table.get(arguments[0]);
+                if (result == null) {
+                    streams.getOut().println("not found");
+                } else {
+                    streams.getOut().println("found");
+                    streams.getOut().println(database.serialize(table, result));
                 }
             }
-        }, new Command("remove", 1) {
+        }, new TableCommand("remove", 1) {
             @Override
-            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams)
-                    throws ArgumentException, ParserException {
-                try {
-                    Table table = getCurrentTable(state);
-                    if (table.remove(arguments[0]) != null) {
-                        streams.getOut().println("removed");
-                    } else {
-                        streams.getOut().println("not found");
-                    }
-                    return true;
-                } catch (TableNotFoundException e) {
-                    return true;
-                } catch (DatabaseException e) {
-                    streams.getErr().println(e.getMessage());
-                    return false;
+            protected void mainAction(Table table, String[] arguments, StreamsContainer streams, Database database)
+                    throws IOException {
+                if (table.remove(arguments[0]) != null) {
+                    streams.getOut().println("removed");
+                } else {
+                    streams.getOut().println("not found");
                 }
             }
-        }, new Command("commit", 0) {
+        }, new TableCommand("commit", 0) {
             @Override
-            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams)
-                    throws ArgumentException, ParserException {
-                try {
-                    streams.getOut().println(getCurrentTable(state).commit());
-                    return true;
-                } catch (IOException | DatabaseException e) {
-                    streams.getErr().println(e.getMessage());
-                    return false;
-                } catch (TableNotFoundException e) {
-                    return true;
-                }
+            protected void mainAction(Table table, String[] arguments, StreamsContainer streams, Database database)
+                    throws IOException {
+                streams.getOut().println(table.commit());
             }
-        }, new Command("rollback", 0) {
+        }, new TableCommand("rollback", 0) {
             @Override
-            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams)
-                    throws ArgumentException, ParserException {
-                try {
-                    streams.getOut().println(getCurrentTable(state).rollback());
-                    return true;
-                } catch (DatabaseException e) {
-                    streams.getErr().println(e.getMessage());
-                    return false;
-                } catch (TableNotFoundException e) {
-                    return true;
-                }
+            protected void mainAction(Table table, String[] arguments, StreamsContainer streams, Database database)
+                    throws IOException {
+                streams.getOut().println(table.rollback());
             }
-        }, new Command("size", 0) {
+        }, new TableCommand("size", 0) {
             @Override
-            protected boolean action(InterpreterState state, String[] arguments, StreamsContainer streams)
-                    throws ArgumentException, ParserException {
-                try {
-                    streams.getOut().println(getCurrentTable(state).size());
-                    return true;
-                } catch (DatabaseException e) {
-                    streams.getErr().println(e.getMessage());
-                    return false;
-                } catch (TableNotFoundException e) {
-                    return false;
-                }
+            protected void mainAction(Table table, String[] arguments, StreamsContainer streams, Database database)
+                    throws IOException {
+                streams.getOut().println(table.size());
             }
         });
     }
