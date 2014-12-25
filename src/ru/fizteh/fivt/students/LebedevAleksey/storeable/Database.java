@@ -205,7 +205,7 @@ public class Database implements TableProvider, AutoCloseable {
     }
 
     private String createTableSignature(List<Class<?>> columnTypes) {
-        String tableSignature = "";
+        StringBuilder tableSignature = new StringBuilder();
         for (Class<?> column : columnTypes) {
             if (column == null) {
                 throw new IllegalArgumentException("Null column");
@@ -214,11 +214,10 @@ public class Database implements TableProvider, AutoCloseable {
             if (type == null) {
                 throw new IllegalArgumentException("Type is not supported");
             }
-            tableSignature += type;
-            tableSignature += " ";
+            tableSignature.append(type);
+            tableSignature.append(" ");
         }
-        tableSignature = tableSignature.trim();
-        return tableSignature;
+        return tableSignature.deleteCharAt(tableSignature.length() - 1).toString();
     }
 
     public Path getRootDirectoryPath() {
